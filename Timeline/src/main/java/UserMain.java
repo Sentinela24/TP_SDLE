@@ -5,8 +5,12 @@ import java.util.concurrent.ExecutionException;
 
 public class UserMain {
     public static void main(String args[]) throws IOException, SpreadException, ExecutionException, InterruptedException {
-        User user = new User(args[0]);
 
-        user.menu();
+        //User user = new User(args[0]);
+        //user.menu();
+
+        NewUser nUser = new NewUser("cv", "15550");
+        nUser.menu();
+
     }
 }
