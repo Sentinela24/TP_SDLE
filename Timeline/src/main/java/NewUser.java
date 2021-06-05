@@ -2,10 +2,7 @@ import io.atomix.cluster.messaging.MessagingConfig;
 import io.atomix.cluster.messaging.impl.NettyMessagingService;
 import io.atomix.utils.net.Address;
 import io.atomix.utils.serializer.Serializer;
-import spread.BasicMessageListener;
-import spread.SpreadConnection;
-import spread.SpreadException;
-import spread.SpreadMessage;
+import spread.*;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -36,6 +33,10 @@ public class NewUser {
     private CompletableFuture<byte[]> request;
     private boolean[] first;
     private BufferedReader reader;
+    private SpreadGroup super_user_group;
+
+    private Following following;
+    private Followers followers;
 
     public NewUser(String usr, String ownAddr) throws UnknownHostException, SpreadException {
 
@@ -49,31 +50,6 @@ public class NewUser {
         this.ms = new NettyMessagingService("Peer", this.ownAddr, new MessagingConfig());
         this.s = Serializer.builder().withTypes(InitMsg.class).build();
         this.lastId = 0;
-
-        // ################### SPREAD ####################
-        this.conn = new SpreadConnection();
-        conn.connect(InetAddress.getByName("localhost"), 4803, "client" + ownAddr, false, false);
-        this.first = new boolean[] {true};
-
-
-        conn.add(new BasicMessageListener() {
-            @Override
-            public void messageReceived(SpreadMessage spreadMessage) {
-                if (first[0]){
-                    synchronized (first){
-                        first[0] = false;
-                    }
-
-                    String receivedData = new String(spreadMessage.getData(), StandardCharsets.UTF_8);
-
-                    //Msg q vem do server
-                    System.out.println(receivedData);
-
-                    request.complete(spreadMessage.getData());
-                }
-            }
-        });
-
 
         // ################### ATOMIX ####################
         ms.registerHandler("entry-resp", (a,m)->{
@@ -92,6 +68,32 @@ public class NewUser {
     }
 
 
+    public void super_group_conn() throws UnknownHostException, SpreadException {
+
+        // ################### SPREAD ####################
+
+        this.conn = new SpreadConnection();
+        conn.connect(InetAddress.getByName("localhost"), 4803, "client" + this.ownAddr, false, false);
+        this.first = new boolean[] {true};
+
+        this.super_user_group = new SpreadGroup();
+
+        //Necessário acrescentar qual o superuser que o bootstrap forneceu à frente de "SuperGroup" - usar o username desse superpeer
+        this.super_user_group.join(this.conn, "SuperGroup");
+
+        //Juntar-se ao seu grupo de seguidores (para lhes enviar msgs)
+        this.followers.entry();
+
+        //Juntar-se aos grupos de quem está a seguir para receber as msgs
+        this.following.entry();
+
+
+        // ################## THREAD TO LISTEN ##################
+        Listener_User l_User = new Listener_User(this, this.conn);
+        Thread t = new Thread(l_User);
+        t.start();
+    }
+
     // ################### req super peer ####################
     public void reqSuperPeer(){
 
@@ -102,6 +104,8 @@ public class NewUser {
 
 
     // ######################## //
+
+    /*
     public void check(String msg) throws ExecutionException, InterruptedException {
         this.request = new CompletableFuture<>();
         this.first[0] = true;
@@ -127,7 +131,9 @@ public class NewUser {
         this.request.get();
     }
     // ########################### //
+    */
 
+    /*
     public void increment(String msg) throws ExecutionException, InterruptedException {
         this.request = new CompletableFuture<>();
         this.first[0] = true;
@@ -152,6 +158,7 @@ public class NewUser {
 
         this.request.get();
     }
+     */
 
     // ########################### //
 
@@ -160,30 +167,100 @@ public class NewUser {
         boolean valido = true;
 
         reqSuperPeer();
+        super_group_conn();
 
         while (valido) {
             System.out.println("\n----------- MENU -----------\n");
-            System.out.println("1-Check");
-            System.out.println("2-Increment");
+            System.out.println("1-Post");
+            System.out.println("2-Subscribe");
+            System.out.println("3-Unsubscribe");
             System.out.print("Escolha uma das opções: ");
+
             opcao = this.reader.readLine();
 
-            if (opcao.equals("1")) {
-                String msg = ("check");
-                check(msg);
-            }
+            switch (opcao) {
+                case "1":
+                    //String msg = ("check");
+                    //check(msg);
 
-            else if (opcao.equals("2")) {
-                System.out.print("Valor: ");
-                valor = this.reader.readLine();
-                String msg = ("increment" + " " + valor);
-                increment(msg);
-            }
-            else {
-                valido = false;
+                    this.following.post();
+                    break;
+                case "2":
+                    //System.out.print("Valor: ");
+                    //valor = this.reader.readLine();
+                    //String msg = ("increment" + " " + valor);
+                    //increment(msg);
+
+                    this.followers.follow();
+                    break;
+                case "3":
+
+                    this.followers.unfollow();
+                    break;
+                default:
+                    valido = false;
+                    break;
             }
         }
+    }
 
+    public String getSpreadMsgUsername(String private_group){
+        String[] tokens = private_group.substring(1).split("#");
+
+        return tokens[0];
+    }
+
+    public void message_process(SpreadMessage spread_msg) {
+        if (spread_msg.isRegular()) {
+            message_process_regular(spread_msg);
+        }
+        else {
+            //message_process_membership(spread_msg);
+        }
+    }
+
+    private void message_process_regular(SpreadMessage spread_msg){
+        Message msg = this.s.decode(spread_msg.getData());
+        String following = msg.getFollowing();
+        String type = msg.getType();
+
+        switch (type) {
+            case "POST" : //POST recebido de alguém que estamos a seguir (following)
+                this.followers.update_posts(getSpreadMsgUsername(spread_msg.getSender().toString()), msg.getPosts());
+                break;
+
+            case "POSTS" :
+                // Recebido do nosso following (quem estámos a seguir)
+                if (following.equals(getSpreadMsgUsername(spread_msg.getSender().toString()))) {
+                    this.followers.update_posts(getSpreadMsgUsername(spread_msg.getSender().toString()), msg.getPosts());
+                }
+
+                // Recebido de um follower do nosso following
+
+
+                break;
+
+            case "REQUEST" : //REQUEST de algum follower
+                Message response = new Message();
+                response.setType("POSTS");
+
+                // Verificar se sou eu o following
+                if (this.username.equals(following)){
+                    response.setPosts(this.following.get_posts(msg.getLast_post_ID()));
+                    // Status...
+                    response.setFollowing(following);
+                    this.following.send_message(response, spread_msg.getSender().toString());
+                }
+
+                // Caso de ser um follower e não o following direto
+
+                break;
+
+            // Mensagens do servidor bootstrap........
+
+            default :
+                break;
+        }
     }
 
 

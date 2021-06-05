@@ -37,7 +37,6 @@ public class Bootstrap {
         //#######################   ENTRY REQUEST       #######################//
         ms.registerHandler("handle-entry-req", (a,m)->{
 
-
             InitMsg msg = this.s.decode(m);
 
             if(SuperPeers.size() == 0) {
