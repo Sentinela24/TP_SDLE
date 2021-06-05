@@ -14,7 +14,7 @@ public class SuperUser {
         int port = Integer.parseInt(args[0]);
         ScheduledExecutorService es = Executors.newScheduledThreadPool(1);
         SpreadConnection conn = new SpreadConnection();
-        conn.connect(InetAddress.getByName("localhost"), 4803, "server" + port, false, false);
+        conn.connect(InetAddress.getByName("localhost"), Integer.parseInt(args[1]), "server" + port, false, false);
 
         conn.add(new BasicMessageListener() {
             @Override

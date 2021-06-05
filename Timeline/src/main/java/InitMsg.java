@@ -28,6 +28,13 @@ public class InitMsg implements Serializable {
         this.addr = addr;
     }
 
+    // alt bs server resp
+    public InitMsg(boolean isSuper, String username, String addr) {
+        this.isSuper = isSuper;
+        this.username = username;
+        this.addr = addr;
+    }
+
     public String getUsername() {
         return username;
     }

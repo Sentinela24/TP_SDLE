@@ -9,7 +9,9 @@ public class UserMain {
         //User user = new User(args[0]);
         //user.menu();
 
-        NewUser nUser = new NewUser("cv", "15550");
+        NewUser nUser = new NewUser(args[0], args[1]);
+        //NewUser nUser2 = new NewUser("cv1", "15551");
+
         nUser.menu();
 
     }

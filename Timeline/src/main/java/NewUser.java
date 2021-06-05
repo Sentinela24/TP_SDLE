@@ -2,10 +2,7 @@ import io.atomix.cluster.messaging.MessagingConfig;
 import io.atomix.cluster.messaging.impl.NettyMessagingService;
 import io.atomix.utils.net.Address;
 import io.atomix.utils.serializer.Serializer;
-import spread.BasicMessageListener;
-import spread.SpreadConnection;
-import spread.SpreadException;
-import spread.SpreadMessage;
+import spread.*;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -14,10 +11,7 @@ import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.*;
 
 public class NewUser {
 
@@ -31,6 +25,7 @@ public class NewUser {
     private Integer lastId;
     private String username;
     private boolean isSuper;
+    private String sp_user;
 
     private SpreadConnection conn;
     private CompletableFuture<byte[]> request;
@@ -52,27 +47,8 @@ public class NewUser {
 
         // ################### SPREAD ####################
         this.conn = new SpreadConnection();
-        conn.connect(InetAddress.getByName("localhost"), 4803, "client" + ownAddr, false, false);
-        this.first = new boolean[] {true};
-
-
-        conn.add(new BasicMessageListener() {
-            @Override
-            public void messageReceived(SpreadMessage spreadMessage) {
-                if (first[0]){
-                    synchronized (first){
-                        first[0] = false;
-                    }
-
-                    String receivedData = new String(spreadMessage.getData(), StandardCharsets.UTF_8);
-
-                    //Msg q vem do server
-                    System.out.println(receivedData);
-
-                    request.complete(spreadMessage.getData());
-                }
-            }
-        });
+        //conn.connect(InetAddress.getByName("localhost"), 4803, "client" + ownAddr, false, false);
+        //this.first = new boolean[] {true};
 
 
         // ################### ATOMIX ####################
@@ -80,10 +56,103 @@ public class NewUser {
 
             InitMsg msg = this.s.decode(m);
             this.isSuper = msg.isSuper();
-            // if true become super ?
-            // else recolher
 
-            //System.out.println(msg.getAddr());
+            if(isSuper){
+
+                Message account = new Message();
+
+                conn.add(new BasicMessageListener() {
+                    @Override
+                    public void messageReceived(SpreadMessage spreadMessage) {
+                        String msg = new String(spreadMessage.getData(), StandardCharsets.UTF_8);
+                        String[] fields = msg.split(" ");
+                        byte[] response;
+
+                        response = msg.getBytes();
+
+                        if(fields[0].equals("check")){
+                            response = ("Value is " + account.check()).getBytes();
+                        }
+                        else{
+                            int value = Integer.parseInt(fields[1]);
+                            account.increment(value);
+
+                            response = "Increment done!".getBytes();
+                        }
+
+                        SpreadMessage send = new SpreadMessage();
+                        send.setData(response);
+                        send.setReliable();
+                        send.addGroup(spreadMessage.getSender());
+
+
+                        try{
+                            conn.multicast(send);
+                        }
+                        catch (SpreadException e){
+                            e.printStackTrace();
+                        }
+                    }
+
+
+                });
+
+                //conectar-se ao daemon
+                //criar spread group & join spread group
+                try {
+
+                    conn.connect(InetAddress.getByName("localhost"), Integer.parseInt(msg.getAddr()), "client" + ownAddr, false, false);
+                    SpreadGroup group = new SpreadGroup();
+                    group.join(conn, username + "_SUPERGROUP");
+
+                } catch (SpreadException e) {
+                    e.printStackTrace();
+                } catch (UnknownHostException e) {
+                    e.printStackTrace();
+                }
+
+                es.scheduleAtFixedRate(() -> {
+                    System.out.println("Server " + username + " has " + account.check());
+                }, 0 ,5, TimeUnit.SECONDS);
+
+            }
+             else /////// SE FOR PEER NORMAL //////
+                 {
+
+                     this.first = new boolean[] {true};
+                     this.sp_user = msg.getUsername();
+
+                     conn.add(new BasicMessageListener() {
+                         @Override
+                         public void messageReceived(SpreadMessage spreadMessage) {
+
+                             String receivedData = new String(spreadMessage.getData(), StandardCharsets.UTF_8);
+
+                             //Msg q vem do server
+                             System.out.println(receivedData);
+
+                             request.complete(spreadMessage.getData());
+
+                         }
+                     });
+
+                     //connect to given spread daemon & join given userNameSuperGroup
+                     try {
+
+                         conn.connect(InetAddress.getByName("localhost"), Integer.parseInt(msg.getAddr()), "client" + ownAddr, false, false);
+                         SpreadGroup group = new SpreadGroup();
+                         group.join(conn, this.sp_user + "_SUPERGROUP");
+
+                     } catch (SpreadException e) {
+                         e.printStackTrace();
+                     } catch (UnknownHostException e) {
+                         e.printStackTrace();
+                     }
+                     // send my hw stats
+                     // create my group for followers to join
+                     // enter followees groups
+
+            }
 
         }, this.es);
 
@@ -91,6 +160,10 @@ public class NewUser {
         ms.start();
     }
 
+
+    public boolean isSuper() {
+        return isSuper;
+    }
 
     // ################### req super peer ####################
     public void reqSuperPeer(){
@@ -106,7 +179,8 @@ public class NewUser {
         this.request = new CompletableFuture<>();
         this.first[0] = true;
 
-        String group = "servers";
+        //String group = "servers";
+        String group = this.sp_user + "_SUPERGROUP";
 
         SpreadMessage message = new SpreadMessage();
 
@@ -132,7 +206,8 @@ public class NewUser {
         this.request = new CompletableFuture<>();
         this.first[0] = true;
 
-        String group = "servers";
+        //String group = "servers";
+        String group = this.sp_user + "_SUPERGROUP";
 
         SpreadMessage message = new SpreadMessage();
 
@@ -181,6 +256,8 @@ public class NewUser {
             }
             else {
                 valido = false;
+                ms.stop();
+                es.shutdownNow();
             }
         }
 

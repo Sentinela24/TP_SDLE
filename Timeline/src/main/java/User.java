@@ -21,6 +21,7 @@ public class User {
     public User(String port) throws UnknownHostException, SpreadException {
         this.conn = new SpreadConnection();
         conn.connect(InetAddress.getByName("localhost"), 4803, "client" + port, false, false);
+
         this.first = new boolean[] {true};
 
         conn.add(new BasicMessageListener() {
