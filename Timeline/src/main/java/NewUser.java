@@ -10,7 +10,8 @@ import java.io.InputStreamReader;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.nio.charset.StandardCharsets;
-import java.util.Map;
+import java.time.LocalDateTime;
+import java.util.*;
 import java.util.concurrent.*;
 
 public class NewUser {
@@ -24,8 +25,12 @@ public class NewUser {
     private Address ownAddr;
     private Integer lastId;
     private String username;
+
     private boolean isSuper;
     private String sp_user;
+    private String sp_user_unicast;
+    private int sp_user_port;
+    private Map<String, List<String>> peers_reg;
 
     private SpreadConnection conn;
     private CompletableFuture<byte[]> request;
@@ -59,19 +64,37 @@ public class NewUser {
 
             if(isSuper){
 
+                this.peers_reg = new HashMap<>();
                 Message account = new Message();
 
                 conn.add(new BasicMessageListener() {
                     @Override
                     public void messageReceived(SpreadMessage spreadMessage) {
+
                         String msg = new String(spreadMessage.getData(), StandardCharsets.UTF_8);
                         String[] fields = msg.split(" ");
                         byte[] response;
 
                         response = msg.getBytes();
 
+
                         if(fields[0].equals("check")){
                             response = ("Value is " + account.check()).getBytes();
+                        }else if(fields[0].equals("specs")){
+
+                            List<String> values = new ArrayList<String>();
+                            values.add(fields[1]);
+                            values.add(fields[2]);
+                            peers_reg.put(spreadMessage.getSender().toString(), values);
+
+                            System.out.println("------------------");
+                            for(Map.Entry<String, List<String>> e : peers_reg.entrySet())
+                            {
+                                System.out.println(e.getKey() + " : " + e.getValue());
+                            }
+
+                            response = "OK".getBytes();
+
                         }
                         else{
                             int value = Integer.parseInt(fields[1]);
@@ -84,7 +107,6 @@ public class NewUser {
                         send.setData(response);
                         send.setReliable();
                         send.addGroup(spreadMessage.getSender());
-
 
                         try{
                             conn.multicast(send);
@@ -101,7 +123,9 @@ public class NewUser {
                 //criar spread group & join spread group
                 try {
 
-                    conn.connect(InetAddress.getByName("localhost"), Integer.parseInt(msg.getAddr()), "client" + ownAddr, false, false);
+                    this.sp_user_port =  Integer.parseInt(msg.getAddr().split("#")[0]);
+
+                    conn.connect(InetAddress.getByName("localhost"), this.sp_user_port, "" + this.username, false, false);
                     SpreadGroup group = new SpreadGroup();
                     group.join(conn, username + "_SUPERGROUP");
 
@@ -111,16 +135,20 @@ public class NewUser {
                     e.printStackTrace();
                 }
 
+                /*
                 es.scheduleAtFixedRate(() -> {
                     System.out.println("Server " + username + " has " + account.check());
                 }, 0 ,5, TimeUnit.SECONDS);
+                */
 
             }
              else /////// SE FOR PEER NORMAL //////
                  {
 
-                     this.first = new boolean[] {true};
+                     //this.first = new boolean[] {true};
                      this.sp_user = msg.getUsername();
+                     this.sp_user_port = Integer.parseInt(msg.getAddr().split("#")[0]);
+                     this.sp_user_unicast = "#" + this.sp_user + "#" + msg.getAddr().split("#")[1];
 
                      conn.add(new BasicMessageListener() {
                          @Override
@@ -132,6 +160,7 @@ public class NewUser {
                              System.out.println(receivedData);
 
                              request.complete(spreadMessage.getData());
+                             //System.out.println("z" + spreadMessage.getSender());
 
                          }
                      });
@@ -139,7 +168,7 @@ public class NewUser {
                      //connect to given spread daemon & join given userNameSuperGroup
                      try {
 
-                         conn.connect(InetAddress.getByName("localhost"), Integer.parseInt(msg.getAddr()), "client" + ownAddr, false, false);
+                         conn.connect(InetAddress.getByName("localhost"), this.sp_user_port, "" + this.username, false, false);
                          SpreadGroup group = new SpreadGroup();
                          group.join(conn, this.sp_user + "_SUPERGROUP");
 
@@ -149,6 +178,9 @@ public class NewUser {
                          e.printStackTrace();
                      }
                      // send my hw stats
+
+                     pushSpecs();
+
                      // create my group for followers to join
                      // enter followees groups
 
@@ -173,11 +205,38 @@ public class NewUser {
 
     }
 
+    public void pushSpecs(){
+
+        int cpu = Runtime.getRuntime().availableProcessors();
+        Random random = new Random();
+        int rnd = random.nextInt(4 - 1) + 1;
+        cpu = cpu * rnd;
+        LocalDateTime boot = java.time.LocalDateTime.now();
+
+        String msg = "specs " + cpu + " " + boot;
+
+        byte[] send_msg = msg.getBytes();
+
+        SpreadMessage message = new SpreadMessage();
+        message.setData(send_msg);
+        message.setSafe();
+        message.addGroup(this.sp_user_unicast);
+
+        try{
+            this.conn.multicast(message);
+        }
+        catch (SpreadException e){
+            System.out.println("Failure!");
+            e.printStackTrace();
+        }
+
+    }
 
     // ######################## //
     public void check(String msg) throws ExecutionException, InterruptedException {
+
         this.request = new CompletableFuture<>();
-        this.first[0] = true;
+        //this.first[0] = true;
 
         //String group = "servers";
         String group = this.sp_user + "_SUPERGROUP";
@@ -188,7 +247,8 @@ public class NewUser {
 
         message.setData(send_msg);
         message.setSafe();
-        message.addGroup(group);
+        //message.addGroup(group);
+        message.addGroup(this.sp_user_unicast);
 
         try{
             this.conn.multicast(message);
@@ -199,12 +259,13 @@ public class NewUser {
         }
 
         this.request.get();
+
     }
     // ########################### //
 
     public void increment(String msg) throws ExecutionException, InterruptedException {
         this.request = new CompletableFuture<>();
-        this.first[0] = true;
+        //this.first[0] = true;
 
         //String group = "servers";
         String group = this.sp_user + "_SUPERGROUP";

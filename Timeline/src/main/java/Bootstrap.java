@@ -20,7 +20,7 @@ public class Bootstrap {
     private Serializer s;
     //private Map<String, String> SuperPeers;
     private Map<String, List<String>> SuperPeers;
-    private List<String> spreadDaemons = Arrays.asList("4803", "4804", "4805");
+    private List<String> spreadDaemons = Arrays.asList("4803#alfa", "4804#bravo", "4805#charlie");
 
 
 
