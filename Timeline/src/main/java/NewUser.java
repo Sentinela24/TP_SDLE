@@ -34,6 +34,7 @@ public class NewUser {
 
     private SpreadConnection conn;
     private CompletableFuture<byte[]> request;
+    private CompletableFuture<byte[]> request2;
     private boolean[] first;
     private BufferedReader reader;
     private SpreadGroup super_user_group;
@@ -72,12 +73,12 @@ public class NewUser {
         this.checked = false;
 
         this.request = new CompletableFuture<>();
+        this.request2 = new CompletableFuture<>();
 
         // ################### ATOMIX ####################
 
         ms.registerHandler("response-log", (a, m) -> {
             this.checked = this.s.decode(m);
-            System.out.println("testeeee");
             request.complete(m);
 
         }, this.es);
@@ -127,8 +128,6 @@ public class NewUser {
                 e.printStackTrace();
             }
 
-            System.out.println("teste");
-
             //Juntar-se aos grupos de quem está a seguir para receber as msgs
             try {
                 this.following.entry();
@@ -143,6 +142,8 @@ public class NewUser {
             Thread t = new Thread(l_User);
             t.start();
 
+            this.request2.complete(m);
+
         }, this.es);
 
         this.reader = new BufferedReader(new InputStreamReader(System.in));
@@ -150,10 +151,11 @@ public class NewUser {
     }
 
     // ################### req super peer ####################
-    public void reqSuperPeer(){
+    public void reqSuperPeer() throws ExecutionException, InterruptedException {
 
         InitMsg msg = new InitMsg(this.username, ++this.lastId);
         ms.sendAsync(bootStrapAddr, "handle-entry-req", this.s.encode(msg));
+        request2.get();
     }
 
 
@@ -262,6 +264,10 @@ public class NewUser {
             else
                 ms.sendAsync(bootStrapAddr, "handle-Register", this.s.encode(msg));
             request.get();
+
+            if(!this.checked) {
+                System.out.println("Something went wrong, try again!");
+            }
         }
     }
 
@@ -269,6 +275,7 @@ public class NewUser {
         String opcao;
 
         reqSuperPeer();
+        System.out.println("testee");
 
         while (online && !(prepare_to_leave)) {
             System.out.println("\n----------- MENU -----------\n");
@@ -277,7 +284,7 @@ public class NewUser {
             System.out.println("3 - Unsubscribe");
             System.out.println("4 - LogOut");
             System.out.print("Escolha uma das opções: ");
-            System.out.println("\n----------------------------\n");
+            System.out.println("\n----------------------------");
 
             opcao = this.reader.readLine();
 

@@ -131,7 +131,7 @@ public class Followers {
 
             m.put(p.getId_post(), p);
 
-            System.out.println("\n****************** POST RECEIVED ******************");
+            System.out.println("****************** POST RECEIVED ******************");
             System.out.println("FROM: " + following);
             System.out.println("CONTENT: " + p.getText());
             System.out.println("DATE : " + p.getDate());

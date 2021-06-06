@@ -21,7 +21,7 @@ public class Bootstrap {
     private Serializer s;
     //private Map<String, String> superPeers;
     private List<String> spreadDaemons = Arrays.asList("4803", "4804", "4805");
-    private Map<String, Triple<Boolean, String, String>> superPeers; // Username - (Online ou não, Endereço, Daemon)
+    private Map<String, Pair<String, String>> superPeers; // Username - (Endereço, Daemon)
     private Map<String, Triple<String, Boolean, String>> peers;
 
 
@@ -33,7 +33,7 @@ public class Bootstrap {
         this.ms = new NettyMessagingService("Bootstrap", this.addr, new MessagingConfig());
 
         //Colocar o Serializer -- é preciso um formato de msg
-        this.s = Serializer.builder().withTypes(InitMsg.class).build();
+        this.s = Serializer.builder().withTypes(InitMsg.class, Message.class).build();
 
         //formato username - IP : Netty_Port : Spread_Daemon
         this.superPeers = new HashMap<>();
@@ -44,7 +44,7 @@ public class Bootstrap {
 
             String username = msg.getUsername();
             String pass = msg.getPass();
-            System.out.println("testeee");
+
             if (this.peers.containsKey(username)){
                 ms.sendAsync(a, "response-log", this.s.encode(false));
             }
@@ -90,7 +90,7 @@ public class Bootstrap {
                 //System.out.println("************ Random Value ************ \n" + key + " :: " + superPeers.get(key));
 
                 // GET do Endereço do Spread Daemon
-                InitMsg rsp = new InitMsg(false, key.toString(), superPeers.get(key).getThird());
+                InitMsg rsp = new InitMsg(false, key.toString(), superPeers.get(key).getSecond());
                 ms.sendAsync(a, "entry-resp", this.s.encode(rsp));
 
             }
@@ -110,7 +110,7 @@ public class Bootstrap {
 
         Random rand = new Random();
         String spread_port = spreadDaemons.get(rand.nextInt(spreadDaemons.size()));
-        Triple values = new Triple<>(true, ad.toString(), spread_port);
+        Pair values = new Pair<>(ad.toString(), spread_port);
 
         this.superPeers.put(m.getUsername(), values);
 
@@ -122,15 +122,8 @@ public class Bootstrap {
 
         if (this.peers.containsKey(username) && pass.equals(this.peers.get(username).getFirst())){
 
-            // Um user que fosse superpeer ao entrar novamente permance superpeer???
-            if (this.superPeers.containsKey(username)){
-                this.superPeers.put(username, new Triple<>(true, address.toString(), spreadDaemons.get(rand.nextInt(spreadDaemons.size()))));
-            }
-            else {
-                this.peers.put(username, new Triple<>(pass, true, address.toString()));
-            }
-
-            ms.sendAsync(address, "response-log", this.s.encode(false));
+            this.peers.put(username, new Triple<>(pass, true, address.toString()));
+            ms.sendAsync(address, "response-log", this.s.encode(true));
         }
 
         else {
@@ -142,7 +135,7 @@ public class Bootstrap {
     public void showState()
     {
         System.out.println("------------------");
-        for(Map.Entry<String, Triple<Boolean, String, String>> e : this.superPeers.entrySet())
+        for(Map.Entry<String, Pair<String, String>> e : this.superPeers.entrySet())
         {
             System.out.println(e.getKey() + " : " + e.getValue());
         }
