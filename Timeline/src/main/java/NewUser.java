@@ -47,7 +47,7 @@ public class NewUser {
 
         this.es = Executors.newScheduledThreadPool(1);
         this.ms = new NettyMessagingService("Peer", this.ownAddr, new MessagingConfig());
-        this.s = Serializer.builder().withTypes(InitMsg.class, MyMSG.class, LocalDateTime.class).build();
+        this.s = Serializer.builder().withTypes(InitMsg.class, Message.class, LocalDateTime.class).build();
         this.lastId = 0;
 
         // ################### SPREAD ####################
@@ -90,26 +90,26 @@ public class NewUser {
                 System.out.println("Peer " + key + " with " + max + " and " + max_uptime);
 
                 // comunicar ao peer
-                String msg = "become " + sp_user_port;
 
+                Message msg = new Message("BECOME");
+
+                SpreadMessage message = new SpreadMessage();
+                message.setData(this.s.encode(msg));
+                message.setSafe();
+                message.addGroup(key);
+
+                try{
+                    this.conn.multicast(message);
+                }
+                catch (SpreadException e){
+                    System.out.println("Failure!");
+                    e.printStackTrace();
+                }
+
+                peers_reg.remove(key);
                 //ms.sendAsync(Address.from(key), "become", this.s.encode("null".getBytes()));
 
             }
-        }, this.es);
-
-
-        ms.registerHandler("become", (a,m)->{
-
-            try {
-                System.out.println("yz");
-                //becomeSP();
-                this.conn.disconnect();
-                System.out.println("become");
-
-            } catch (SpreadException e) {
-                e.printStackTrace();
-            }
-
         }, this.es);
 
         // ################### END ATOMIX ####################
@@ -183,7 +183,7 @@ public class NewUser {
     }
 
 
-    public void message_process(SpreadMessage spread_msg) {
+    public void message_process(SpreadMessage spread_msg) throws SpreadException, InterruptedException {
         if (spread_msg.isRegular()) {
             message_process_regular(spread_msg);
         }
@@ -192,13 +192,15 @@ public class NewUser {
         }
     }
 
-    private void message_process_regular(SpreadMessage spread_msg){
+    private void message_process_regular(SpreadMessage spread_msg) throws SpreadException, InterruptedException {
 
-        //Message msg = this.s.decode(spread_msg.getData());
-        MyMSG msg = this.s.decode(spread_msg.getData());
+        Message msg = this.s.decode(spread_msg.getData());
+        //MyMSG msg = this.s.decode(spread_msg.getData());
 
         //String following = msg.getFollowing();
         String type = msg.getType();
+        System.out.println(type);
+        System.out.println(spread_msg.getSender());
 
         switch (type) {
             case "POST" : //POST recebido de alguém que estamos a seguir (following)
@@ -241,8 +243,17 @@ public class NewUser {
 
                 List<String> values = new ArrayList<String>();
                 values.add(""+msg.getCpu());
-                values.add(msg.getBoot().toString());
-                peers_reg.put(msg.getAddr(), values);
+                values.add(msg.getBoot());
+                peers_reg.put(spread_msg.getSender().toString(), values);
+
+                break;
+
+            case "BECOME" :
+
+                System.out.println("RRRRR");
+                //this.conn.disconnect();
+                becomeSP();
+                System.out.println("TESTE");
 
                 break;
 
@@ -274,11 +285,9 @@ public class NewUser {
         LocalDateTime boot = java.time.LocalDateTime.now();
 
         //Mandar End. Netty p depois fcilitar a comunicação
-        //Message send_msg = new Message(type, ""+cp, boot.toString(), ownAddr.toString());
-        //MyMSG send_msg = new MyMSG("SPECS", ""+cpu, boot.toString(), ownAddr.toString());
+        //Message send_msg = new Message("SPECS", cpu, boot.toString(), ownAddr.toString());
 
-        //MyMSG send_msg = new MyMSG(""+cpu, boot.toString());
-        MyMSG send_msg = new MyMSG("SPECS", cpu, boot, ownAddr.toString());
+        Message send_msg = new Message("SPECS", cpu, boot.toString());
 
         SpreadMessage message = new SpreadMessage();
         message.setData(this.s.encode(send_msg));

@@ -17,7 +17,7 @@ public class Message {
     private String following;
 
     //
-    private String cpu;
+    private int cpu;
     private String boot;
     private String addr;
 
@@ -97,11 +97,11 @@ public class Message {
         this.following = following;
     }
 
-    public String getCpu() {
+    public int getCpu() {
         return cpu;
     }
 
-    public void setCpu(String cpu) {
+    public void setCpu(int cpu) {
         this.cpu = cpu;
     }
 
@@ -121,11 +121,16 @@ public class Message {
         this.addr = addr;
     }
 
-    public Message(String type, String cpu, String boot, String addr) {
+
+    public Message(String type) {
+        this.type = type;
+    }
+
+    public Message(String type, int cpu, String boot) {
         this.type = type;
         this.cpu = cpu;
         this.boot = boot;
-        this.addr = addr;
+        //this.addr = addr;
     }
 
     /*

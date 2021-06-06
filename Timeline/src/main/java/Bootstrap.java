@@ -18,7 +18,6 @@ public class Bootstrap {
     private NettyMessagingService ms;
     private ScheduledExecutorService es;
     private Serializer s;
-    //private Map<String, String> SuperPeers;
     private Map<String, List<String>> SuperPeers;
     private List<String> spreadDaemons = Arrays.asList("4803#alfa", "4804#bravo", "4805#charlie");
     private int leafs_cnt;
