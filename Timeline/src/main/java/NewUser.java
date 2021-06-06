@@ -307,8 +307,6 @@ public class NewUser {
 
     private void becomeSP() throws SpreadException, InterruptedException {
 
-        System.out.println("Thattttttttttt");
-
         conn.disconnect();
 
         System.out.println("Thizzzzzzzzzzzz");
@@ -353,6 +351,7 @@ public class NewUser {
             opcao = this.reader.readLine();
 
             if (opcao.equals("1")) {
+                // DEBUG //
                 System.out.println("------------------");
                 for(Map.Entry<String, List<String>> e : peers_reg.entrySet())
                 {
