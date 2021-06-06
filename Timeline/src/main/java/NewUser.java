@@ -9,14 +9,12 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
-import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.concurrent.*;
 
 public class NewUser {
 
-    private Address addr;
     private NettyMessagingService ms;
     private ScheduledExecutorService es;
     private Serializer s;
@@ -33,8 +31,6 @@ public class NewUser {
     private Map<String, List<String>> peers_reg;
 
     private SpreadConnection conn;
-    private CompletableFuture<byte[]> request;
-    private boolean[] first;
     private BufferedReader reader;
 
     public NewUser(String usr, String ownAddr) throws UnknownHostException, SpreadException, InterruptedException {
@@ -42,18 +38,13 @@ public class NewUser {
         this.username = usr;
         this.ownAddr = Address.from(Integer.parseInt(ownAddr));
         this.bootStrapAddr = Address.from(Integer.parseInt("10000"));
-        //this.bootStrapAddr = Address.from(bootStrapAddr);
         this.isSuper = false;
 
         this.es = Executors.newScheduledThreadPool(1);
         this.ms = new NettyMessagingService("Peer", this.ownAddr, new MessagingConfig());
         this.s = Serializer.builder().withTypes(InitMsg.class, Message.class, LocalDateTime.class).build();
         this.lastId = 0;
-
-        // ################### SPREAD ####################
         this.conn = new SpreadConnection();
-        //conn.connect(InetAddress.getByName("localhost"), 4803, "client" + ownAddr, false, false);
-        //this.first = new boolean[] {true};
 
 
         // ################### ATOMIX ####################
@@ -62,7 +53,7 @@ public class NewUser {
             InitMsg msg = this.s.decode(m);
             this.isSuper = msg.isSuper();
 
-            this.sp_user = msg.getUsername(); //se n for super n vai ter nada
+            this.sp_user = msg.getUsername(); //username of SP - se for super n vai ter nada
             this.sp_user_port = Integer.parseInt(msg.getAddr().split("#")[0]);
             this.sp_user_unicast = "#" + this.sp_user + "#" + msg.getAddr().split("#")[1];
 
@@ -89,8 +80,7 @@ public class NewUser {
 
                 System.out.println("Peer " + key + " with " + max + " and " + max_uptime);
 
-                // comunicar ao peer
-
+                // comunicar ao peer & ao BS
                 Message msg = new Message("BECOME");
 
                 SpreadMessage message = new SpreadMessage();
@@ -107,7 +97,6 @@ public class NewUser {
                 }
 
                 peers_reg.remove(key);
-                //ms.sendAsync(Address.from(key), "become", this.s.encode("null".getBytes()));
 
             }
         }, this.es);
@@ -139,11 +128,6 @@ public class NewUser {
                 e.printStackTrace();
             }
 
-            // ################## THREAD TO LISTEN ##################
-            Listener_User l_User = new Listener_User(this, this.conn);
-            Thread t = new Thread(l_User);
-            t.start();
-
         }
 
         else /////// SE FOR PEER NORMAL //////
@@ -157,31 +141,98 @@ public class NewUser {
                 SpreadGroup group = new SpreadGroup();
                 group.join(conn, this.sp_user + "_SUPERGROUP");
 
-                //System.out.println("Teste");
-                //conn.disconnect();
-                //System.out.println("new");
-
             } catch (SpreadException e) {
                 e.printStackTrace();
             } catch (UnknownHostException e) {
                 e.printStackTrace();
             }
+
             // send my hw stats
-
             pushSpecs();
-
-            // ################## THREAD TO LISTEN ##################
-            Listener_User l_User = new Listener_User(this, this.conn);
-            Thread t = new Thread(l_User);
-            t.start();
 
             // create my group for followers to join
             // enter followees groups
 
-        }
+            }
+
+        // ################## THREAD TO LISTEN ##################
+        Listener_User l_User = new Listener_User(this, this.conn);
+        Thread t = new Thread(l_User);
+        t.start();
 
     }
 
+
+    // ################### req super peer ####################
+    public void reqSuperPeer(){
+
+        InitMsg msg = new InitMsg(this.username, ++this.lastId);
+        ms.sendAsync(bootStrapAddr, "handle-entry-req", this.s.encode(msg));
+
+    }
+
+
+    // ################### push specs ####################
+    public void pushSpecs(){
+
+        //Send Peer Specs to SuperPeer
+        int cpu = Runtime.getRuntime().availableProcessors();
+        Random random = new Random();
+        int rnd = random.nextInt(5 - 1) + 1;
+        cpu = cpu * rnd;
+        LocalDateTime boot = java.time.LocalDateTime.now();
+
+        Message send_msg = new Message("SPECS", cpu, boot.toString());
+
+        SpreadMessage message = new SpreadMessage();
+        message.setData(this.s.encode(send_msg));
+        message.setSafe();
+        message.addGroup(this.sp_user_unicast);
+
+        try{
+            this.conn.multicast(message);
+        }
+        catch (SpreadException e){
+            System.out.println("Failure!");
+            e.printStackTrace();
+        }
+
+    }
+    // ###################   ####################
+
+    // ################### BECOME SP #################### //
+    private void becomeSP() throws SpreadException, InterruptedException {
+
+        // Disconnect from Current Spread_Conn, initialize SP vars
+        conn.disconnect();
+        this.isSuper = true;
+        this.peers_reg = new HashMap<>();
+
+        //conectar-se ao daemon + criar spread group & join spread group
+        try {
+
+            conn.connect(InetAddress.getByName("localhost"), this.sp_user_port, "" + this.username, false, false);
+            SpreadGroup group = new SpreadGroup();
+            group.join(conn, username + "_SUPERGROUP");
+
+        } catch (SpreadException e) {
+            e.printStackTrace();
+        } catch (UnknownHostException e) {
+            e.printStackTrace();
+        }
+
+        List<String> values = new ArrayList<String>();
+        values.add(ownAddr.toString());
+        values.add(sp_user_port + "#" + sp_user_unicast.split("#")[2]);
+
+        InitMsg new_msg = new InitMsg(this.username, values);
+        ms.sendAsync(bootStrapAddr, "joined-sp", this.s.encode(new_msg));       //Notify Bootstrap
+
+    }
+
+
+
+    // ################### PROCESS MSGS #################### //
 
     public void message_process(SpreadMessage spread_msg) throws SpreadException, InterruptedException {
         if (spread_msg.isRegular()) {
@@ -250,84 +301,16 @@ public class NewUser {
 
             case "BECOME" :
 
-                System.out.println("RRRRR");
-                //this.conn.disconnect();
+                //Become SP
                 becomeSP();
-                System.out.println("TESTE");
-
                 break;
 
 
-                // Mensagens do servidor bootstrap........
+            // Mensagens do servidor bootstrap........
 
             default :
                 break;
         }
-    }
-
-
-    // ################### req super peer ####################
-    public void reqSuperPeer(){
-
-        InitMsg msg = new InitMsg(this.username, ++this.lastId);
-        ms.sendAsync(bootStrapAddr, "handle-entry-req", this.s.encode(msg));
-
-    }
-
-
-    // ################### push specs ####################
-    public void pushSpecs(){
-
-        int cpu = Runtime.getRuntime().availableProcessors();
-        Random random = new Random();
-        int rnd = random.nextInt(5 - 1) + 1;
-        cpu = cpu * rnd;
-        LocalDateTime boot = java.time.LocalDateTime.now();
-
-        //Mandar End. Netty p depois fcilitar a comunicação
-        //Message send_msg = new Message("SPECS", cpu, boot.toString(), ownAddr.toString());
-
-        Message send_msg = new Message("SPECS", cpu, boot.toString());
-
-        SpreadMessage message = new SpreadMessage();
-        message.setData(this.s.encode(send_msg));
-        message.setSafe();
-        message.addGroup(this.sp_user_unicast);
-
-        try{
-            this.conn.multicast(message);
-        }
-        catch (SpreadException e){
-            System.out.println("Failure!");
-            e.printStackTrace();
-        }
-
-    }
-    // ###################   ####################
-
-    private void becomeSP() throws SpreadException, InterruptedException {
-
-        conn.disconnect();
-
-        System.out.println("Thizzzzzzzzzzzz");
-
-        this.peers_reg = new HashMap<>();
-        //Message account = new Message();
-
-        //conectar-se ao daemon
-        //criar spread group & join spread group
-        try {
-
-            conn.connect(InetAddress.getByName("localhost"), this.sp_user_port, "" + this.username, false, false);
-            SpreadGroup group = new SpreadGroup();
-            group.join(conn, username + "_SUPERGROUP");
-
-        } catch (SpreadException e) {
-            e.printStackTrace();
-        } catch (UnknownHostException e) {
-            e.printStackTrace();
-        }
-
     }
 
 

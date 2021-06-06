@@ -29,15 +29,11 @@ public class Bootstrap {
         this.addr = Address.from(Integer.parseInt("10000"));
         this.es = Executors.newScheduledThreadPool(1);
         this.ms = new NettyMessagingService("Bootstrap", this.addr, new MessagingConfig());
-
-        //Colocar o Serializer -- é preciso um formato de msg
         this.s = Serializer.builder().withTypes(InitMsg.class).build();
-
-        //formato username - IP : Netty_Port : Spread_Daemon
-        this.SuperPeers = new HashMap<String, List<String>>();
+        this.SuperPeers = new HashMap<String, List<String>>();              //formato username - IP : Netty_Port : Spread_Daemon
 
 
-        //#######################   ENTRY REQUEST       #######################//
+        //#######################   ENTRY REQUEST   #######################//
         ms.registerHandler("handle-entry-req", (a,m)->{
 
             InitMsg msg = this.s.decode(m);
@@ -62,7 +58,6 @@ public class Bootstrap {
                 // Get Random SP se existir.
                 Object[] keys = SuperPeers.keySet().toArray();
                 Object key = keys[new Random().nextInt(keys.length)];
-                //System.out.println("************ Random Value ************ \n" + key + " :: " + SuperPeers.get(key));
 
                 // GET do Endereço do Spread Daemon
                 InitMsg rsp = new InitMsg(false, key.toString(), SuperPeers.get(key).get(1));
@@ -79,6 +74,19 @@ public class Bootstrap {
 
                 }
             }
+
+        }, this.es);
+
+        //##################   HANDLE ELECTION PROMOTION   ##################//
+        ms.registerHandler("joined-sp", (a,m)->{
+
+            InitMsg msg = this.s.decode(m);
+
+            this.SuperPeers.put(msg.getUsername(), msg.getBecome());
+            this.leafs_cnt--;
+            this.sp_cnt++;
+
+            showState();
 
         }, this.es);
 
@@ -110,10 +118,14 @@ public class Bootstrap {
         }
     }
 
+    //#######################   MAIN   #######################//
+
     public static void main(String args[]) throws IOException, SpreadException, ExecutionException, InterruptedException {
 
         Bootstrap bootstrap = new Bootstrap();
 
     }
+    //#######################   END   #######################//
+
 
 }

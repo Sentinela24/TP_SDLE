@@ -1,4 +1,5 @@
 import java.io.Serializable;
+import java.util.List;
 
 public class InitMsg implements Serializable {
 
@@ -8,6 +9,7 @@ public class InitMsg implements Serializable {
     private boolean isSuper;
     //private Object obj;
     private String addr;
+    private List<String> become;
 
     /*
     public Bootstrap_Comm(boolean isSuper, Object obj) {
@@ -33,6 +35,11 @@ public class InitMsg implements Serializable {
         this.isSuper = isSuper;
         this.username = username;
         this.addr = addr;
+    }
+
+    public InitMsg(String username, List<String> become) {
+        this.username = username;
+        this.become = become;
     }
 
     public String getUsername() {
@@ -66,4 +73,13 @@ public class InitMsg implements Serializable {
     public void setAddr(String addr) {
         this.addr = addr;
     }
+
+    public List<String> getBecome() {
+        return become;
+    }
+
+    public void setBecome(List<String> become) {
+        this.become = become;
+    }
 }
+
