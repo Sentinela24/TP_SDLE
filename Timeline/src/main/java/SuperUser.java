@@ -9,6 +9,7 @@ import java.util.concurrent.TimeUnit;
 
 public class SuperUser {
     public static void main(String[] args) throws UnknownHostException, SpreadException {
+        /*
 
         Message account = new Message();
         int port = Integer.parseInt(args[0]);
@@ -55,6 +56,6 @@ public class SuperUser {
         es.scheduleAtFixedRate(() -> {
             System.out.println("Server " + port + " has " + account.check());
         }, 0 ,5, TimeUnit.SECONDS);
-
+    */
     }
 }

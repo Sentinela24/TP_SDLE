@@ -10,6 +10,7 @@ import java.io.InputStreamReader;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.nio.charset.StandardCharsets;
+import java.util.GregorianCalendar;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
@@ -27,7 +28,9 @@ public class NewUser {
     private Address ownAddr;
     private Integer lastId;
     private String username;
+    private String pass;
     private boolean isSuper;
+    private String sp_user;
 
     private SpreadConnection conn;
     private CompletableFuture<byte[]> request;
@@ -37,6 +40,11 @@ public class NewUser {
 
     private Following following;
     private Followers followers;
+
+    private boolean online;
+    private int superuser_connected_users;
+    private boolean prepare_to_leave;
+    private boolean checked;
 
     public NewUser(String usr, String ownAddr) throws UnknownHostException, SpreadException {
 
@@ -48,18 +56,92 @@ public class NewUser {
 
         this.es = Executors.newScheduledThreadPool(1);
         this.ms = new NettyMessagingService("Peer", this.ownAddr, new MessagingConfig());
-        this.s = Serializer.builder().withTypes(InitMsg.class).build();
+        this.s = Serializer.builder().withTypes(InitMsg.class, Message.class, Post.class, GregorianCalendar.class).build();
         this.lastId = 0;
 
+        this.conn = new SpreadConnection();
+        this.reader = new BufferedReader(new InputStreamReader(System.in));
+        this.super_user_group = new SpreadGroup();
+
+        this.following = new Following(this, this.username, this.conn, this.reader, this.s);
+        this.followers = new Followers(this.username, this.conn, this.s, this.reader);
+
+        this.online = false;
+        this.superuser_connected_users = 0;
+        this.prepare_to_leave = false;
+        this.checked = false;
+
+        this.request = new CompletableFuture<>();
+
         // ################### ATOMIX ####################
+
+        ms.registerHandler("response-log", (a, m) -> {
+            this.checked = this.s.decode(m);
+            System.out.println("testeeee");
+            request.complete(m);
+
+        }, this.es);
+
         ms.registerHandler("entry-resp", (a,m)->{
 
             InitMsg msg = this.s.decode(m);
             this.isSuper = msg.isSuper();
-            // if true become super ?
-            // else recolher
+            System.out.println(this.isSuper);
 
-            //System.out.println(msg.getAddr());
+            if (this.isSuper){
+
+                try {
+                    //conectar-se ao daemon
+                    //criar spread group & join spread group
+                    System.out.println(Integer.parseInt(msg.getAddr()));
+
+                    conn.connect(InetAddress.getByName("localhost"), Integer.parseInt(msg.getAddr()), this.username, false, true);
+                    super_user_group.join(conn, username + "_SUPERGROUP");
+
+                } catch (SpreadException | UnknownHostException e) {
+                    e.printStackTrace();
+                }
+
+            }
+
+            else { /////// SE FOR PEER NORMAL //////
+                this.sp_user = msg.getUsername();
+
+                //connect to given spread daemon & join given userNameSuperGroup
+                try {
+                    System.out.println(Integer.parseInt(msg.getAddr()));
+                    System.out.println(this.sp_user);
+
+                    conn.connect(InetAddress.getByName("localhost"), Integer.parseInt(msg.getAddr()), this.username, false, true);
+                    super_user_group.join(conn, this.sp_user + "_SUPERGROUP");
+
+                } catch (SpreadException | UnknownHostException e) {
+                    e.printStackTrace();
+                }
+            }
+
+            //Juntar-se ao seu grupo de seguidores (para lhes enviar msgs)
+            try {
+                this.followers.entry();
+            } catch (SpreadException e) {
+                e.printStackTrace();
+            }
+
+            System.out.println("teste");
+
+            //Juntar-se aos grupos de quem está a seguir para receber as msgs
+            try {
+                this.following.entry();
+            } catch (SpreadException e) {
+                e.printStackTrace();
+            }
+
+            this.online = true;
+
+            // ################## THREAD TO LISTEN ##################
+            Listener_User l_User = new Listener_User(this, this.conn);
+            Thread t = new Thread(l_User);
+            t.start();
 
         }, this.es);
 
@@ -67,39 +149,11 @@ public class NewUser {
         ms.start();
     }
 
-
-    public void super_group_conn() throws UnknownHostException, SpreadException {
-
-        // ################### SPREAD ####################
-
-        this.conn = new SpreadConnection();
-        conn.connect(InetAddress.getByName("localhost"), 4803, "client" + this.ownAddr, false, false);
-        this.first = new boolean[] {true};
-
-        this.super_user_group = new SpreadGroup();
-
-        //Necessário acrescentar qual o superuser que o bootstrap forneceu à frente de "SuperGroup" - usar o username desse superpeer
-        this.super_user_group.join(this.conn, "SuperGroup");
-
-        //Juntar-se ao seu grupo de seguidores (para lhes enviar msgs)
-        this.followers.entry();
-
-        //Juntar-se aos grupos de quem está a seguir para receber as msgs
-        this.following.entry();
-
-
-        // ################## THREAD TO LISTEN ##################
-        Listener_User l_User = new Listener_User(this, this.conn);
-        Thread t = new Thread(l_User);
-        t.start();
-    }
-
     // ################### req super peer ####################
     public void reqSuperPeer(){
 
         InitMsg msg = new InitMsg(this.username, ++this.lastId);
         ms.sendAsync(bootStrapAddr, "handle-entry-req", this.s.encode(msg));
-
     }
 
 
@@ -162,19 +216,68 @@ public class NewUser {
 
     // ########################### //
 
+    public void initial_menu() throws IOException, ExecutionException, InterruptedException, SpreadException {
+        String opcao;
+
+        System.out.println("\n----------- INITIAL MENU -----------\n");
+        System.out.println("1 - LogIn");
+        System.out.println("2 - Register");
+
+        opcao = this.reader.readLine();
+
+        switch (opcao) {
+            case "1":
+                verify_entry("LogIn");
+                break;
+
+            case "2":
+                verify_entry("Register");
+                break;
+
+            default:
+                break;
+        }
+
+        menu();
+    }
+
+    public void verify_entry(String type) throws IOException, ExecutionException, InterruptedException {
+        System.out.println("\n---------- " + type + " ----------" );
+        Message msg;
+
+        while (!this.checked){
+            System.out.println("Enter your username: ");
+            this.username = reader.readLine();
+
+            System.out.println("Enter your password: ");
+            this.pass = reader.readLine();
+
+            msg = new Message();
+            msg.setUsername(this.username);
+            msg.setPass(this.pass);
+
+            if (type.equals("LogIn"))
+                ms.sendAsync(bootStrapAddr, "handle-LogIn", this.s.encode(msg));
+
+            else
+                ms.sendAsync(bootStrapAddr, "handle-Register", this.s.encode(msg));
+            request.get();
+        }
+    }
+
     public void menu() throws IOException, SpreadException, ExecutionException, InterruptedException {
-        String opcao, valor;
-        boolean valido = true;
+        String opcao;
 
         reqSuperPeer();
-        super_group_conn();
 
-        while (valido) {
+        while (online && !(prepare_to_leave)) {
             System.out.println("\n----------- MENU -----------\n");
-            System.out.println("1-Post");
-            System.out.println("2-Subscribe");
-            System.out.println("3-Unsubscribe");
+            System.out.println("1 - Post");
+            System.out.println("2 - Subscribe");
+            System.out.println("3 - Unsubscribe");
+            System.out.println("4 - LogOut");
             System.out.print("Escolha uma das opções: ");
+            System.out.println("\n----------------------------\n");
 
             opcao = this.reader.readLine();
 
@@ -197,8 +300,15 @@ public class NewUser {
 
                     this.followers.unfollow();
                     break;
+
+                case "4":
+                    if (this.isSuper) {
+                        super_user_logout();
+                    }
+                    else {
+                        user_logout();
+                    }
                 default:
-                    valido = false;
                     break;
             }
         }
@@ -226,7 +336,7 @@ public class NewUser {
 
         switch (type) {
             case "POST" : //POST recebido de alguém que estamos a seguir (following)
-                this.followers.update_posts(getSpreadMsgUsername(spread_msg.getSender().toString()), msg.getPosts());
+                this.followers.update_post(getSpreadMsgUsername(spread_msg.getSender().toString()), msg.getPosts());
                 break;
 
             case "POSTS" :
@@ -256,11 +366,40 @@ public class NewUser {
 
                 break;
 
-            // Mensagens do servidor bootstrap........
-
             default :
                 break;
         }
+    }
+
+    private void user_logout() throws SpreadException {
+        this.online = false;
+
+        ms.sendAsync(bootStrapAddr, "handle-logout", this.s.encode(this.username));
+
+        this.followers.logout();
+        this.following.logout();
+        this.super_user_group.leave();
+    }
+
+    public void super_user_logout() throws SpreadException {
+        ms.sendAsync(bootStrapAddr, "handle-logout", this.s.encode(this.username));
+
+        this.followers.logout();
+        this.following.logout();
+
+        if (this.superuser_connected_users == 1){
+            if (this.super_user_group != null) {
+                this.super_user_group.leave();
+            }
+
+            this.online = false;
+            System.exit(0);
+        }
+        else{
+            this.prepare_to_leave = true;
+        }
+
+
     }
 
 

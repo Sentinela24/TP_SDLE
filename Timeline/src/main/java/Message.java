@@ -3,6 +3,7 @@ import java.util.List;
 public class Message {
     private int value;
     private String type;
+    private String username;
     private String pass;
     private List<Post> posts;
     private int last_post_ID;
@@ -15,6 +16,10 @@ public class Message {
 
     public Message() {
     }
+
+    public String getUsername() { return username; }
+
+    public void setUsername(String username) { this.username = username; }
 
     public int getValue() {
         return value;

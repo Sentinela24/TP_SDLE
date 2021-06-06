@@ -1,4 +1,3 @@
-import com.sun.tools.javac.util.Pair;
 import io.atomix.utils.serializer.Serializer;
 import spread.SpreadConnection;
 import spread.SpreadException;
@@ -27,6 +26,7 @@ public class Followers {
         this.seri = seri;
         this.in = in;
 
+        this.followings = new HashMap<>();
         this.followings_groups = new HashMap<>();
         this.n_posts_received = 0;
         this.posts_received = new ArrayList<>();
@@ -102,10 +102,33 @@ public class Followers {
         }
     }
 
-    public void update_posts(String following, List<Post> posts){
+    public void update_post(String following, List<Post> posts){
         Map<Integer, Post> m = this.followings.get(following);
 
+        if (m == null) {
+            this.followings.put(following, new HashMap<>());
+        }
+
+        for (Post p : posts){
+            this.followings.get(following).put(p.getId_post(), p);
+
+            System.out.println("\n\n****************** POST RECEIVED ******************\n");
+            System.out.println("FROM: " + following);
+            System.out.println("CONTENT: " + p.getText());
+            System.out.println("DATE : " + p.getDate().getTime().toString());
+        }
+    }
+
+    public void update_posts(String following, List<Post> posts){
+        Map<Integer, Post> m = this.followings.get(following);
+        boolean self_post = true;
+
+        if (m != null){
+            self_post = false;
+
+        }
         for(Post p : posts){
+
             m.put(p.getId_post(), p);
 
             System.out.println("\n****************** POST RECEIVED ******************");
@@ -115,5 +138,10 @@ public class Followers {
         }
     }
 
+    public void logout() throws SpreadException {
+        for (SpreadGroup sg : this.followings_groups.values()){
+            sg.leave();
+        }
+    }
 
 }

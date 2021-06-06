@@ -9,7 +9,7 @@ import java.io.IOException;
 import java.util.*;
 
 public class Following {
-    private User user;
+    private NewUser user;
     private String username;
     private SpreadConnection conn;
     private Map<Integer, Post> myPosts;
@@ -17,7 +17,7 @@ public class Following {
     private BufferedReader in;
     private Serializer seri;
 
-    public Following(User user, String username, SpreadConnection conn, BufferedReader in, Serializer seri) {
+    public Following(NewUser user, String username, SpreadConnection conn, BufferedReader in, Serializer seri) {
         this.user = user;
         this.username = username;
         this.conn = conn;
@@ -121,5 +121,9 @@ public class Following {
         } catch (SpreadException e) {
             e.printStackTrace();
         }
+    }
+
+    public void logout() throws SpreadException {
+        this.myGroup.leave();
     }
 }

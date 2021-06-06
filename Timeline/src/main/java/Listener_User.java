@@ -15,12 +15,13 @@ public class Listener_User implements Runnable{
 
     @Override
     public void run() {
-        try {
-            SpreadMessage spread_msg = this.conn.receive();
-            this.user.message_process(spread_msg);
-        }
-        catch (SpreadException | InterruptedIOException e){
-            e.printStackTrace();
+        while (true) {
+            try {
+                SpreadMessage spread_msg = this.conn.receive();
+                this.user.message_process(spread_msg);
+            } catch (SpreadException | InterruptedIOException e) {
+                e.printStackTrace();
+            }
         }
     }
 }

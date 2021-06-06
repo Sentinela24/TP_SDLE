@@ -1,3 +1,5 @@
+import aux.Pair;
+import aux.Triple;
 import io.atomix.cluster.messaging.MessagingConfig;
 import io.atomix.cluster.messaging.impl.NettyMessagingService;
 import io.atomix.utils.net.Address;
@@ -17,59 +19,85 @@ public class Bootstrap {
     private NettyMessagingService ms;
     private ScheduledExecutorService es;
     private Serializer s;
-    private Map<String, String> SuperPeers;
+    //private Map<String, String> superPeers;
+    private List<String> spreadDaemons = Arrays.asList("4803", "4804", "4805");
+    private Map<String, Triple<Boolean, String, String>> superPeers; // Username - (Online ou não, Endereço, Daemon)
+    private Map<String, Triple<String, Boolean, String>> peers;
+
 
 
     public Bootstrap() {
 
         this.addr = Address.from(Integer.parseInt("10000"));
-
         this.es = Executors.newScheduledThreadPool(1);
         this.ms = new NettyMessagingService("Bootstrap", this.addr, new MessagingConfig());
 
         //Colocar o Serializer -- é preciso um formato de msg
         this.s = Serializer.builder().withTypes(InitMsg.class).build();
 
-        //formato username - IP:Port, pq em larga escala pode haver users com ips iguais
-        this.SuperPeers = new HashMap<String, String>();
+        //formato username - IP : Netty_Port : Spread_Daemon
+        this.superPeers = new HashMap<>();
+        this.peers = new HashMap<>();
 
+        ms.registerHandler("handle-Register", (a, m) -> {
+            Message msg = this.s.decode(m);
+
+            String username = msg.getUsername();
+            String pass = msg.getPass();
+            System.out.println("testeee");
+            if (this.peers.containsKey(username)){
+                ms.sendAsync(a, "response-log", this.s.encode(false));
+            }
+            else {
+                this.peers.put(username, new Triple<>(pass, false, a.toString()));
+                login(username, pass, a);
+            }
+
+        }, this.es);
+
+        ms.registerHandler("handle-LogIn", (a, m) -> {
+            Message msg = this.s.decode(m);
+
+            String username = msg.getUsername();
+            String pass = msg.getPass();
+
+            login(username, pass, a);
+
+        }, this.es);
 
         //#######################   ENTRY REQUEST       #######################//
         ms.registerHandler("handle-entry-req", (a,m)->{
 
             InitMsg msg = this.s.decode(m);
 
-            if(SuperPeers.size() == 0) {
+            if(superPeers.size() == 0) {
 
-                this.SuperPeers.put(msg.getUsername(), a.toString());
-
-
-                InitMsg rsp = new InitMsg(true, "null");
+                String spread_port = getSpreadPort(msg, a);
+                InitMsg rsp = new InitMsg(true, spread_port);
                 ms.sendAsync(a, "entry-resp", this.s.encode(rsp));
 
-            }else if(SuperPeers.size() < 4){
+            }else if(superPeers.size() < 2){
 
-                // Get Random SP se existir.
-                Object[] keys = SuperPeers.keySet().toArray();
-                Object key = keys[new Random().nextInt(keys.length)];
-                //System.out.println("************ Random Value ************ \n" + key + " :: " + SuperPeers.get(key));
-
-                this.SuperPeers.put(msg.getUsername(), a.toString());
-
-                InitMsg rsp = new InitMsg(true, SuperPeers.get(key));
+                String spread_port = getSpreadPort(msg, a);
+                InitMsg rsp = new InitMsg(true, spread_port);
                 ms.sendAsync(a, "entry-resp", this.s.encode(rsp));
-
 
             }else{
-                // Get Random SP se existir.
-                Object[] keys = SuperPeers.keySet().toArray();
-                Object key = keys[new Random().nextInt(keys.length)];
-                System.out.println("************ Random Value ************ \n" + key + " :: " + SuperPeers.get(key));
 
-                InitMsg rsp = new InitMsg(false, SuperPeers.get(key));
+                // Get Random SP se existir.
+                Object[] keys = superPeers.keySet().toArray();
+                Object key = keys[new Random().nextInt(keys.length)];
+                //System.out.println("************ Random Value ************ \n" + key + " :: " + superPeers.get(key));
+
+                // GET do Endereço do Spread Daemon
+                InitMsg rsp = new InitMsg(false, key.toString(), superPeers.get(key).getThird());
                 ms.sendAsync(a, "entry-resp", this.s.encode(rsp));
 
             }
+
+        }, this.es);
+
+        ms.registerHandler("handle-logout", (a,m) -> {
 
         }, this.es);
 
@@ -77,17 +105,50 @@ public class Bootstrap {
 
     }
 
+
+    private String getSpreadPort(InitMsg m, Address ad){
+
+        Random rand = new Random();
+        String spread_port = spreadDaemons.get(rand.nextInt(spreadDaemons.size()));
+        Triple values = new Triple<>(true, ad.toString(), spread_port);
+
+        this.superPeers.put(m.getUsername(), values);
+
+        return spread_port;
+    }
+
+    private void login(String username, String pass, Address address){
+        Random rand = new Random();
+
+        if (this.peers.containsKey(username) && pass.equals(this.peers.get(username).getFirst())){
+
+            // Um user que fosse superpeer ao entrar novamente permance superpeer???
+            if (this.superPeers.containsKey(username)){
+                this.superPeers.put(username, new Triple<>(true, address.toString(), spreadDaemons.get(rand.nextInt(spreadDaemons.size()))));
+            }
+            else {
+                this.peers.put(username, new Triple<>(pass, true, address.toString()));
+            }
+
+            ms.sendAsync(address, "response-log", this.s.encode(false));
+        }
+
+        else {
+            ms.sendAsync(address, "response-log", this.s.encode(false));
+        }
+    }
+
     /* Para propósitos de Debug */
     public void showState()
     {
         System.out.println("------------------");
-        for(Map.Entry<String, String> e : this.SuperPeers.entrySet())
+        for(Map.Entry<String, Triple<Boolean, String, String>> e : this.superPeers.entrySet())
         {
             System.out.println(e.getKey() + " : " + e.getValue());
         }
     }
 
-    public static void main(String args[]) throws IOException, SpreadException, ExecutionException, InterruptedException {
+    public static void main(String[] args) throws IOException, SpreadException, ExecutionException, InterruptedException {
 
         Bootstrap bootstrap = new Bootstrap();
 

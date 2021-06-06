@@ -16,6 +16,10 @@ public class InitMsg implements Serializable {
     }
      */
 
+    public InitMsg(String username) {
+        this.username = username;
+    }
+
     //1st client msg
     public InitMsg(String username, Integer id) {
         this.username = username;
@@ -25,6 +29,18 @@ public class InitMsg implements Serializable {
     // bs server resp
     public InitMsg(boolean isSuper, String addr) {
         this.isSuper = isSuper;
+        this.addr = addr;
+    }
+
+    // alt bs server resp
+    public InitMsg(boolean isSuper, String username, String addr) {
+        this.isSuper = isSuper;
+        this.username = username;
+        this.addr = addr;
+    }
+
+    public InitMsg(String username, String addr) {
+        this.username = username;
         this.addr = addr;
     }
 
