@@ -21,7 +21,8 @@ public class Bootstrap {
     //private Map<String, String> SuperPeers;
     private Map<String, List<String>> SuperPeers;
     private List<String> spreadDaemons = Arrays.asList("4803#alfa", "4804#bravo", "4805#charlie");
-
+    private int leafs_cnt;
+    private int sp_cnt;
 
 
     public Bootstrap() {
@@ -44,17 +45,21 @@ public class Bootstrap {
 
             if(SuperPeers.size() == 0) {
 
+                this.sp_cnt++;
                 String spread_port = getSpreadPort(msg, a);
                 InitMsg rsp = new InitMsg(true, spread_port);
                 ms.sendAsync(a, "entry-resp", this.s.encode(rsp));
 
+
             }else if(SuperPeers.size() < 2){
 
+                this.sp_cnt++;
                 String spread_port = getSpreadPort(msg, a);
                 InitMsg rsp = new InitMsg(true, spread_port);
                 ms.sendAsync(a, "entry-resp", this.s.encode(rsp));
 
             }else{
+
                 // Get Random SP se existir.
                 Object[] keys = SuperPeers.keySet().toArray();
                 Object key = keys[new Random().nextInt(keys.length)];
@@ -64,6 +69,16 @@ public class Bootstrap {
                 InitMsg rsp = new InitMsg(false, key.toString(), SuperPeers.get(key).get(1));
                 ms.sendAsync(a, "entry-resp", this.s.encode(rsp));
 
+                this.leafs_cnt++;
+
+                System.out.println(leafs_cnt/sp_cnt);
+                //SE RACIO < 10 - REQ ELECTION
+                if((double) leafs_cnt/sp_cnt > 1.0){
+
+                    //Request Random SupeerPeer to make election
+                    ms.sendAsync(Address.from(SuperPeers.get(key).get(0)), "elect", this.s.encode("null".getBytes()));
+
+                }
             }
 
         }, this.es);
