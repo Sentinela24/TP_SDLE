@@ -9,15 +9,14 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.concurrent.*;
 
 public class NewUser {
 
-    private final NettyMessagingService ms;
+    private NettyMessagingService ms;
     private final ScheduledExecutorService es;
     private Serializer s;
 
@@ -47,10 +46,13 @@ public class NewUser {
     private boolean checked;
     private Listener_User l_User;
 
-    public NewUser(String usr, String ownAddr) {
+    public NewUser() {
 
-        this.username = usr;
-        this.ownAddr = Address.from(Integer.parseInt(ownAddr));
+        //Ter Endereços Netty Diferentes em Localhost
+        Random random = new Random();
+        int rnd = random.nextInt(1000 - 1) + 8000;
+
+        this.ownAddr = Address.from(rnd);
         this.bootStrapAddr = Address.from(Integer.parseInt("10000"));
         this.isSuper = false;
 
@@ -62,8 +64,6 @@ public class NewUser {
         this.reader = new BufferedReader(new InputStreamReader(System.in));
         this.super_user_group = new SpreadGroup();
 
-        this.following = new Following(this, this.username, this.conn, this.reader, this.s);
-        this.followers = new Followers(this.username, this.conn, this.s, this.reader);
         this.online = false;
         this.checked = false;
 
@@ -73,6 +73,7 @@ public class NewUser {
         // ################### ATOMIX ####################
 
         ms.registerHandler("response-log", (a, m) -> {
+
             this.checked = this.s.decode(m);
             request.complete(m);
 
@@ -123,6 +124,9 @@ public class NewUser {
                     pushSpecs();
 
             }
+
+            this.following = new Following(this, this.username, this.conn, this.reader, this.s);
+            this.followers = new Followers(this.username, this.conn, this.s, this.reader);
 
             //Juntar-se ao seu grupo de seguidores (para lhes enviar msgs)
             try {
@@ -299,7 +303,6 @@ public class NewUser {
     private void message_process_regular(SpreadMessage spread_msg) throws SpreadException {
 
         Message msg = this.s.decode(spread_msg.getData());
-        //MyMSG msg = this.s.decode(spread_msg.getData());
 
         String following = msg.getFollowing();
         String type = msg.getType();
@@ -380,12 +383,13 @@ public class NewUser {
     }
 
 
-    public void verify_entry(String type) throws IOException, ExecutionException, InterruptedException {
+    public void verify_entry(String type) throws IOException, ExecutionException, InterruptedException, NoSuchAlgorithmException {
 
         System.out.println("\n---------- " + type + " ----------" );
         Message msg;
 
         while (!this.checked){
+
             System.out.println("Enter your username: ");
             this.username = reader.readLine();
 
@@ -408,6 +412,7 @@ public class NewUser {
                 System.out.println("Something went wrong, try again!");
             }
         }
+
     }
 
 
@@ -428,7 +433,6 @@ public class NewUser {
 
         }else{
 
-            System.out.println(this.username);
             Message msg = new Message();
             msg.setUsername(this.username);
 
@@ -461,8 +465,20 @@ public class NewUser {
 
     }
 
+    private static String bytesToHex(byte[] hash) {
+        StringBuilder hexString = new StringBuilder(2 * hash.length);
+        for (int i = 0; i < hash.length; i++) {
+            String hex = Integer.toHexString(0xff & hash[i]);
+            if(hex.length() == 1) {
+                hexString.append('0');
+            }
+            hexString.append(hex);
+        }
+        return hexString.toString();
+    }
 
-    public void initial_menu() throws IOException, ExecutionException, InterruptedException, SpreadException {
+
+    public void initial_menu() throws IOException, ExecutionException, InterruptedException, SpreadException, NoSuchAlgorithmException {
         String opcao;
 
         System.out.println("\n----------- INITIAL MENU -----------\n");
@@ -481,6 +497,7 @@ public class NewUser {
                 break;
 
             default:
+                System.exit(0);
                 break;
         }
 
@@ -490,7 +507,7 @@ public class NewUser {
 
     // ########################### //
 
-    public void menu() throws IOException, SpreadException, InterruptedException {
+    public void menu() throws IOException, SpreadException, InterruptedException, NoSuchAlgorithmException {
 
         String opcao;
 

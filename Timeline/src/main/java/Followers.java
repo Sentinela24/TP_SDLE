@@ -42,6 +42,7 @@ public class Followers {
     }
 
     public void entry() throws SpreadException {
+
         SpreadGroup g;
 
         for (Map.Entry <String, Map<Integer, Post>> entry : this.followings.entrySet()) {

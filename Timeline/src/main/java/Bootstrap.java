@@ -2,7 +2,6 @@ import io.atomix.cluster.messaging.MessagingConfig;
 import io.atomix.cluster.messaging.impl.NettyMessagingService;
 import io.atomix.utils.net.Address;
 import io.atomix.utils.serializer.Serializer;
-import org.apache.commons.lang3.tuple.Triple;
 import spread.SpreadException;
 
 import java.io.IOException;
@@ -109,6 +108,8 @@ public class Bootstrap {
                 }
             }
 
+            showState();
+
         }, this.es);
 
         //##################   HANDLE ELECTION PROMOTION   ##################//
@@ -133,13 +134,10 @@ public class Bootstrap {
 
         ms.registerHandler("handle-SP-logout", (a,m) -> {
 
-            showState();
-
             Message msg = this.s.decode(m);
 
             //Remover SP do Map
             this.SuperPeers.remove(msg.getUsername());
-
             showState();
 
             this.sp_cnt--;
