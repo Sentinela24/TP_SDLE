@@ -1,14 +1,11 @@
-import com.fasterxml.jackson.annotation.JsonProperty;
-import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
-
 public class Parser {
 
     private Followers followers;
     private Following following;
 
-    public Parser(Followers followers, Following folllowing) {
+    public Parser(Followers followers, Following following) {
         this.followers = followers;
-        this.following = folllowing;
+        this.following = following;
     }
 
     public Parser()
@@ -28,8 +25,8 @@ public class Parser {
         return following;
     }
 
-    public void setFollowing(Following folllowing) {
-        this.following = folllowing;
+    public void setFollowing(Following following) {
+        this.following = following;
     }
 }
 
