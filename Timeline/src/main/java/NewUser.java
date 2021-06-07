@@ -4,13 +4,12 @@ import io.atomix.utils.net.Address;
 import io.atomix.utils.serializer.Serializer;
 import spread.*;
 
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStreamReader;
+import java.io.*;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.nio.charset.StandardCharsets;
 import java.util.GregorianCalendar;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
@@ -47,9 +46,8 @@ public class NewUser {
     private boolean prepare_to_leave;
     private boolean checked;
 
-    public NewUser(String usr, String ownAddr) throws UnknownHostException, SpreadException {
+    public NewUser(String ownAddr) throws UnknownHostException, SpreadException {
 
-        this.username = usr;
         this.ownAddr = Address.from(Integer.parseInt(ownAddr));
         this.bootStrapAddr = Address.from(Integer.parseInt("10000"));
         //this.bootStrapAddr = Address.from(bootStrapAddr);
@@ -63,9 +61,6 @@ public class NewUser {
         this.conn = new SpreadConnection();
         this.reader = new BufferedReader(new InputStreamReader(System.in));
         this.super_user_group = new SpreadGroup();
-
-        this.following = new Following(this, this.username, this.conn, this.reader, this.s);
-        this.followers = new Followers(this.username, this.conn, this.s, this.reader);
 
         this.online = false;
         this.superuser_connected_users = 0;
@@ -158,64 +153,6 @@ public class NewUser {
         request2.get();
     }
 
-
-    // ######################## //
-
-    /*
-    public void check(String msg) throws ExecutionException, InterruptedException {
-        this.request = new CompletableFuture<>();
-        this.first[0] = true;
-
-        String group = "servers";
-
-        SpreadMessage message = new SpreadMessage();
-
-        byte[] send_msg = msg.getBytes();
-
-        message.setData(send_msg);
-        message.setSafe();
-        message.addGroup(group);
-
-        try{
-            this.conn.multicast(message);
-        }
-        catch (SpreadException e){
-            System.out.println("Unable to MULTICAST Check request to group " + group);
-            e.printStackTrace();
-        }
-
-        this.request.get();
-    }
-    // ########################### //
-    */
-
-    /*
-    public void increment(String msg) throws ExecutionException, InterruptedException {
-        this.request = new CompletableFuture<>();
-        this.first[0] = true;
-
-        String group = "servers";
-
-        SpreadMessage message = new SpreadMessage();
-
-        byte[] send_msg = msg.getBytes();
-
-        message.setData(send_msg);
-        message.setSafe();
-        message.addGroup(group);
-
-        try{
-            this.conn.multicast(message);
-        }
-        catch (SpreadException e){
-            System.out.println("Unable to MULTICAST Increment request to group " + group);
-            e.printStackTrace();
-        }
-
-        this.request.get();
-    }
-     */
-
     // ########################### //
 
     public void initial_menu() throws IOException, ExecutionException, InterruptedException, SpreadException {
@@ -269,20 +206,31 @@ public class NewUser {
                 System.out.println("Something went wrong, try again!");
             }
         }
+
+        this.following = new Following(this, this.username, this.conn, this.reader, this.s);
+        String following_file = this.username + "_following.db";
+        load_following_file(following_file);
+
+        this.followers = new Followers(this.username, this.conn, this.s, this.reader);
+        String followers_file = this.username + "_followers.db";
+        load_followers_file(followers_file);
+
+        //String user_file = this.username + "_user.db";
+        //load_user_file(user_file);
     }
 
     public void menu() throws IOException, SpreadException, ExecutionException, InterruptedException {
         String opcao;
 
         reqSuperPeer();
-        System.out.println("testee");
 
         while (online && !(prepare_to_leave)) {
             System.out.println("\n----------- MENU -----------\n");
             System.out.println("1 - Post");
             System.out.println("2 - Subscribe");
             System.out.println("3 - Unsubscribe");
-            System.out.println("4 - LogOut");
+            System.out.println("4 - Timeline");
+            System.out.println("5 - LogOut");
             System.out.print("Escolha uma das opções: ");
             System.out.println("\n----------------------------");
 
@@ -290,31 +238,35 @@ public class NewUser {
 
             switch (opcao) {
                 case "1":
-                    //String msg = ("check");
-                    //check(msg);
 
                     this.following.post();
                     break;
+
                 case "2":
-                    //System.out.print("Valor: ");
-                    //valor = this.reader.readLine();
-                    //String msg = ("increment" + " " + valor);
-                    //increment(msg);
 
                     this.followers.follow();
+                    //save_user();
                     break;
+
                 case "3":
 
                     this.followers.unfollow();
                     break;
 
                 case "4":
+                    this.followers.get_timeline();
+
+                    break;
+
+                case "5":
                     if (this.isSuper) {
                         super_user_logout();
                     }
                     else {
                         user_logout();
                     }
+                    break;
+
                 default:
                     break;
             }
@@ -340,6 +292,7 @@ public class NewUser {
         Message msg = this.s.decode(spread_msg.getData());
         String following = msg.getFollowing();
         String type = msg.getType();
+        System.out.println(type);
 
         switch (type) {
             case "POST" : //POST recebido de alguém que estamos a seguir (following)
@@ -353,7 +306,9 @@ public class NewUser {
                 }
 
                 // Recebido de um follower do nosso following
-
+                else {
+                    this.followers.update_posts(following, msg.getPosts());
+                }
 
                 break;
 
@@ -370,6 +325,12 @@ public class NewUser {
                 }
 
                 // Caso de ser um follower e não o following direto
+                else {
+                    List<Post> posts = this.followers.get_posts(following, msg.getLast_post_ID());
+                    response.setPosts(posts);
+                    response.setFollowing(following);
+                    this.followers.send_message(response, spread_msg.getSender().toString());
+                }
 
                 break;
 
@@ -378,7 +339,7 @@ public class NewUser {
         }
     }
 
-    private void user_logout() throws SpreadException {
+    private void user_logout() throws SpreadException, IOException {
         this.online = false;
 
         ms.sendAsync(bootStrapAddr, "handle-logout", this.s.encode(this.username));
@@ -386,9 +347,12 @@ public class NewUser {
         this.followers.logout();
         this.following.logout();
         this.super_user_group.leave();
+
+        save_user();
+        System.exit(0);
     }
 
-    public void super_user_logout() throws SpreadException {
+    public void super_user_logout() throws SpreadException, IOException {
         ms.sendAsync(bootStrapAddr, "handle-logout", this.s.encode(this.username));
 
         this.followers.logout();
@@ -400,13 +364,90 @@ public class NewUser {
             }
 
             this.online = false;
+            save_user();
             System.exit(0);
         }
         else{
             this.prepare_to_leave = true;
         }
 
+    }
 
+    private void load_following_file(String following_file) {
+        Following from_file;
+
+        try {
+            FileInputStream fis = new FileInputStream(following_file);
+            ObjectInputStream ois = new ObjectInputStream(fis);
+
+            from_file = (Following) ois.readObject();
+            this.following.setMyPosts(from_file.getMyPosts());
+
+            fis.close();
+            ois.close();
+
+            System.out.println("Following info read from file!");
+        } catch (ClassNotFoundException | IOException e) {
+            System.out.println("Following info hasn't been loaded!");
+        }
+    }
+
+    private void load_followers_file(String followers_file) {
+        Followers from_file;
+
+        try {
+            FileInputStream fis = new FileInputStream(followers_file);
+            ObjectInputStream ois = new ObjectInputStream(fis);
+
+            from_file = (Followers) ois.readObject();
+            this.followers.setFollowings(from_file.getFollowings());
+
+            fis.close();
+            ois.close();
+
+            System.out.println("Followers info read from file!");
+        } catch (ClassNotFoundException | IOException e) {
+            System.out.println("Followers info hasn't been loaded!");
+        }
+    }
+
+    /*
+
+    private void load_user_file(String user_file){
+        NewUser from_file;
+
+        FileInputStream fis = new FileInputStream(followers_file);
+        ObjectInputStream ois = new ObjectInputStream(fis);
+
+        from_file = (NewUser) ois.readObject();
+
+    }
+    */
+
+    private void save_user() throws IOException {
+
+        //String user_file = this.username + "_user.db";
+        //FileOutputStream fos = new FileOutputStream(user_file);
+        //ObjectOutputStream oos = new ObjectOutputStream(fos);
+
+        //oos.writeObject(this);
+
+        String following_file = this.username + "_following.db";
+        FileOutputStream fos = new FileOutputStream(following_file);
+        ObjectOutputStream oos = new ObjectOutputStream(fos);
+
+        oos.writeObject(this.following);
+
+        String followers_file = this.username + "_followers.db";
+        fos = new FileOutputStream(followers_file);
+        oos = new ObjectOutputStream(fos);
+
+        oos.writeObject(this.followers);
+
+        fos.close();
+        oos.close();
+
+        System.out.println("Info saved in respective files!");
     }
 
 

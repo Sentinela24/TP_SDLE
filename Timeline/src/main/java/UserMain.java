@@ -9,7 +9,7 @@ public class UserMain {
         //User user = new User(args[0]);
         //user.menu();
 
-        NewUser nUser = new NewUser(args[0], args[1]);
+        NewUser nUser = new NewUser(args[0]);
         nUser.initial_menu();
 
     }

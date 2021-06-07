@@ -6,16 +6,17 @@ import spread.SpreadMessage;
 
 import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.Serializable;
 import java.util.*;
 
-public class Following {
-    private NewUser user;
-    private String username;
-    private SpreadConnection conn;
+public class Following implements Serializable {
+    private transient NewUser user;
+    private transient String username;
+    private transient SpreadConnection conn;
     private Map<Integer, Post> myPosts;
-    private SpreadGroup myGroup;
-    private BufferedReader in;
-    private Serializer seri;
+    private transient SpreadGroup myGroup;
+    private transient BufferedReader in;
+    private transient Serializer seri;
 
     public Following(NewUser user, String username, SpreadConnection conn, BufferedReader in, Serializer seri) {
         this.user = user;
@@ -109,15 +110,15 @@ public class Following {
     }
 
     public void send_message(Message m, String group) {
-        SpreadMessage message = new SpreadMessage();
+        SpreadMessage msg = new SpreadMessage();
 
-        message.setData(this.seri.encode(m));
-        message.addGroup(group);
-        message.setCausal();
-        message.setReliable();
+        msg.setData(this.seri.encode(m));
+        msg.addGroup(group);
+        msg.setCausal();
+        msg.setReliable();
 
         try {
-            this.conn.multicast(message);
+            this.conn.multicast(msg);
         } catch (SpreadException e) {
             e.printStackTrace();
         }
