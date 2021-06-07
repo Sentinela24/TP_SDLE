@@ -10,14 +10,15 @@ import java.io.InputStreamReader;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.concurrent.*;
 
 public class NewUser {
 
-    private NettyMessagingService ms;
-    private ScheduledExecutorService es;
+    private final NettyMessagingService ms;
+    private final ScheduledExecutorService es;
     private Serializer s;
 
     private Address bootStrapAddr;
@@ -43,12 +44,10 @@ public class NewUser {
     private Followers followers;
 
     private boolean online;
-    private int superuser_connected_users;
-    private boolean prepare_to_leave;
     private boolean checked;
     private Listener_User l_User;
 
-    public NewUser(String usr, String ownAddr) throws UnknownHostException, SpreadException, InterruptedException {
+    public NewUser(String usr, String ownAddr) {
 
         this.username = usr;
         this.ownAddr = Address.from(Integer.parseInt(ownAddr));
@@ -65,10 +64,7 @@ public class NewUser {
 
         this.following = new Following(this, this.username, this.conn, this.reader, this.s);
         this.followers = new Followers(this.username, this.conn, this.s, this.reader);
-
         this.online = false;
-        this.superuser_connected_users = 0;
-        this.prepare_to_leave = false;
         this.checked = false;
 
         this.request = new CompletableFuture<>();
@@ -104,9 +100,7 @@ public class NewUser {
                     conn.connect(InetAddress.getByName("localhost"), this.sp_user_port, "" + this.username, false, false);
                     super_user_group.join(conn, username + "_SUPERGROUP");
 
-                } catch (SpreadException e) {
-                    e.printStackTrace();
-                } catch (UnknownHostException e) {
+                } catch (SpreadException | UnknownHostException e) {
                     e.printStackTrace();
                 }
 
@@ -263,13 +257,11 @@ public class NewUser {
             SpreadGroup group = new SpreadGroup();
             group.join(conn, username + "_SUPERGROUP");
 
-        } catch (SpreadException e) {
-            e.printStackTrace();
-        } catch (UnknownHostException e) {
+        } catch (SpreadException | UnknownHostException e) {
             e.printStackTrace();
         }
 
-        List<String> values = new ArrayList<String>();
+        List<String> values = new ArrayList<>();
         values.add(ownAddr.toString());
         values.add(sp_user_port + "#" + sp_user_unicast.split("#")[2]);
 
@@ -295,7 +287,7 @@ public class NewUser {
 
     // ################### PROCESS MSGS #################### //
 
-    public void message_process(SpreadMessage spread_msg) throws SpreadException, InterruptedException {
+    public void message_process(SpreadMessage spread_msg) throws SpreadException {
         if (spread_msg.isRegular()) {
             message_process_regular(spread_msg);
         }
@@ -304,7 +296,7 @@ public class NewUser {
         }
     }
 
-    private void message_process_regular(SpreadMessage spread_msg) throws SpreadException, InterruptedException {
+    private void message_process_regular(SpreadMessage spread_msg) throws SpreadException {
 
         Message msg = this.s.decode(spread_msg.getData());
         //MyMSG msg = this.s.decode(spread_msg.getData());
@@ -341,7 +333,7 @@ public class NewUser {
 
             case "SPECS" :
 
-                List<String> values = new ArrayList<String>();
+                List<String> values = new ArrayList<>();
                 values.add(""+msg.getCpu());
                 values.add(msg.getBoot());
                 peers_reg.put(spread_msg.getSender().toString(), values);
@@ -498,14 +490,14 @@ public class NewUser {
 
     // ########################### //
 
-    public void menu() throws IOException, SpreadException, ExecutionException, InterruptedException {
+    public void menu() throws IOException, SpreadException, InterruptedException {
 
         String opcao;
 
         reqSuperPeer();
         Thread.sleep(100);
 
-        while (online && !(prepare_to_leave)) {
+        while (online) {
             System.out.println("\n----------- MENU -----------\n");
             System.out.println("1 - Post");
             System.out.println("2 - Subscribe");
