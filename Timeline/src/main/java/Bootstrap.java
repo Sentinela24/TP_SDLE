@@ -2,6 +2,7 @@ import io.atomix.cluster.messaging.MessagingConfig;
 import io.atomix.cluster.messaging.impl.NettyMessagingService;
 import io.atomix.utils.net.Address;
 import io.atomix.utils.serializer.Serializer;
+import org.apache.commons.lang3.tuple.Triple;
 import spread.SpreadException;
 
 import java.io.IOException;
@@ -19,6 +20,7 @@ public class Bootstrap {
     private ScheduledExecutorService es;
     private Serializer s;
     private Map<String, List<String>> SuperPeers;
+    private Map<String, String> Peers;
     private List<String> spreadDaemons = Arrays.asList("4803#alfa", "4804#bravo", "4805#charlie");
     private int leafs_cnt;
     private int sp_cnt;
@@ -29,9 +31,40 @@ public class Bootstrap {
         this.addr = Address.from(Integer.parseInt("10000"));
         this.es = Executors.newScheduledThreadPool(1);
         this.ms = new NettyMessagingService("Bootstrap", this.addr, new MessagingConfig());
-        this.s = Serializer.builder().withTypes(InitMsg.class).build();
-        this.SuperPeers = new HashMap<String, List<String>>();              //formato username - IP : Netty_Port : Spread_Daemon
+        this.s = Serializer.builder().withTypes(InitMsg.class, Message.class).build();
 
+        this.SuperPeers = new HashMap<>();                  //formato username - IP : Netty_Port : Spread_Daemon
+        this.Peers = new HashMap<>();
+
+
+        // ##### REGISTER #####//
+        ms.registerHandler("handle-Register", (a, m) -> {
+
+            Message msg = this.s.decode(m);
+
+            String username = msg.getUsername();
+            String pass = msg.getPass();
+
+            if (this.Peers.containsKey(username)){
+                ms.sendAsync(a, "response-log", this.s.encode(false));
+            }
+            else {
+                this.Peers.put(username, pass);
+                login(username, pass, a);
+            }
+
+        }, this.es);
+
+        ms.registerHandler("handle-LogIn", (a, m) -> {
+
+            Message msg = this.s.decode(m);
+
+            String username = msg.getUsername();
+            String pass = msg.getPass();
+
+            login(username, pass, a);
+
+        }, this.es);
 
         //#######################   ENTRY REQUEST   #######################//
         ms.registerHandler("handle-entry-req", (a,m)->{
@@ -67,10 +100,11 @@ public class Bootstrap {
 
                 System.out.println(leafs_cnt/sp_cnt);
                 //SE RACIO < 10 - REQ ELECTION
-                if((double) leafs_cnt/sp_cnt > 1.0){
+                if((double) leafs_cnt/sp_cnt > 2.0){
 
                     //Request Random SupeerPeer to make election
-                    ms.sendAsync(Address.from(SuperPeers.get(key).get(0)), "elect", this.s.encode("null".getBytes()));
+                    Message payload = new Message("null");
+                    ms.sendAsync(Address.from(SuperPeers.get(key).get(0)), "elect", this.s.encode(payload));
 
                 }
             }
@@ -86,12 +120,33 @@ public class Bootstrap {
             this.leafs_cnt--;
             this.sp_cnt++;
 
+            //showState();
+
+        }, this.es);
+
+
+        ms.registerHandler("handle-peer-logout", (a,m) -> {
+
+            this.leafs_cnt--;
+
+        }, this.es);
+
+        ms.registerHandler("handle-SP-logout", (a,m) -> {
+
             showState();
+
+            Message msg = this.s.decode(m);
+
+            //Remover SP do Map
+            this.SuperPeers.remove(msg.getUsername());
+
+            showState();
+
+            this.sp_cnt--;
 
         }, this.es);
 
         this.ms.start();
-
     }
 
 
@@ -105,6 +160,19 @@ public class Bootstrap {
         this.SuperPeers.put(m.getUsername(), values);
 
         return spread_port;
+    }
+
+
+    private void login(String username, String pass, Address address){
+
+        if (this.Peers.containsKey(username) && pass.equals(this.Peers.get(username))){
+
+            ms.sendAsync(address, "response-log", this.s.encode(true));
+        }
+
+        else {
+            ms.sendAsync(address, "response-log", this.s.encode(false));
+        }
     }
 
 

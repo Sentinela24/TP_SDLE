@@ -12,7 +12,7 @@ public class UserMain {
         NewUser nUser = new NewUser(args[0], args[1]);
         //NewUser nUser2 = new NewUser("cv1", "15551");
 
-        nUser.menu();
+        nUser.initial_menu();
 
     }
 }

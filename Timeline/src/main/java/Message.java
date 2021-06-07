@@ -1,11 +1,14 @@
 import io.atomix.utils.net.Address;
 
 import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 public class Message {
     private int value;
     private String type;
+    private String username;
     private String pass;
     private List<Post> posts;
     private int last_post_ID;
@@ -20,6 +23,7 @@ public class Message {
     private int cpu;
     private String boot;
     private String addr;
+    private Map<String, List<String>> sp_register;
 
 
     public Message() {
@@ -121,9 +125,29 @@ public class Message {
         this.addr = addr;
     }
 
+    public String getUsername() {
+        return username;
+    }
+
+    public void setUsername(String username) {
+        this.username = username;
+    }
+
+    public Map<String, List<String>> getSp_register() {
+        return sp_register;
+    }
+
+    public void setSp_register(Map<String, List<String>> sp_register) {
+        this.sp_register = sp_register;
+    }
 
     public Message(String type) {
         this.type = type;
+    }
+
+    public Message(String type, String username) {
+        this.type = type;
+        this.username = username;
     }
 
     public Message(String type, int cpu, String boot) {
@@ -131,6 +155,11 @@ public class Message {
         this.cpu = cpu;
         this.boot = boot;
         //this.addr = addr;
+    }
+
+    public Message(String type, Map<String, List<String>> sp_register) {
+        this.type = type;
+        this.sp_register = sp_register;
     }
 
     /*

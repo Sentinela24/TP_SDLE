@@ -7,6 +7,7 @@ import java.io.InterruptedIOException;
 public class Listener_User implements Runnable{
     private NewUser user;
     private SpreadConnection conn;
+    private boolean shutdown;
 
     public Listener_User(NewUser u, SpreadConnection conn){
         this.user = u;
@@ -15,7 +16,7 @@ public class Listener_User implements Runnable{
 
     @Override
     public void run() {
-        while(true){
+        while(!shutdown){
 
             try {
                 SpreadMessage spread_msg = this.conn.receive();
@@ -27,4 +28,10 @@ public class Listener_User implements Runnable{
 
         }
     }
+
+    public void shutdown() {
+        shutdown = true;
+    }
+
+
 }
