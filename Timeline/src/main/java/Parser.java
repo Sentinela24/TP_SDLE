@@ -4,7 +4,6 @@ import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 public class Parser {
 
     private Followers followers;
-    @JsonProperty("following")
     private Following following;
 
     public Parser(Followers followers, Following folllowing) {

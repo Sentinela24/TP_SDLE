@@ -509,7 +509,7 @@ public class NewUser {
             try {
 
                 this.parser = mapper.readValue(f, Parser.class);
-                this.followers.setFollowings(parser.getFollowers().getFollowings());
+                this.followers.setSubscriptions_data(parser.getFollowers().getSubscriptions_data());
                 this.following.setMyPosts(parser.getFollowing().getMyPosts());
                 //System.out.println(this.parser.getFollowing().getMyPosts());
                 //System.out.println(this.parser.getFollowers().getFollowings());
