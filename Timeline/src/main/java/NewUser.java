@@ -1,3 +1,4 @@
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.atomix.cluster.messaging.MessagingConfig;
 import io.atomix.cluster.messaging.impl.NettyMessagingService;
 import io.atomix.utils.net.Address;
@@ -5,6 +6,7 @@ import io.atomix.utils.serializer.Serializer;
 import spread.*;
 
 import java.io.BufferedReader;
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.InetAddress;
@@ -45,6 +47,9 @@ public class NewUser {
     private boolean online;
     private boolean checked;
     private Listener_User l_User;
+    private Parser parser;
+    private ObjectMapper mapper = new ObjectMapper();
+    private boolean isLogin = false;
 
     public NewUser() {
 
@@ -125,8 +130,6 @@ public class NewUser {
 
             }
 
-            this.following = new Following(this, this.username, this.conn, this.reader, this.s);
-            this.followers = new Followers(this.username, this.conn, this.s, this.reader);
 
             //Juntar-se ao seu grupo de seguidores (para lhes enviar msgs)
             try {
@@ -142,7 +145,6 @@ public class NewUser {
                 e.printStackTrace();
             }
 
-            this.online = true;
 
             // ################## THREAD TO LISTEN ##################
             this.l_User = new Listener_User(this, this.conn);
@@ -317,6 +319,10 @@ public class NewUser {
                 if (following.equals(getSpreadMsgUsername(spread_msg.getSender().toString()))) {
                     this.followers.update_posts(getSpreadMsgUsername(spread_msg.getSender().toString()), msg.getPosts());
                 }
+                // Recebido de um follower do nosso following
+                else {
+                    this.followers.update_posts(following, msg.getPosts());
+                }
 
                 break;
 
@@ -330,6 +336,13 @@ public class NewUser {
                     // Status...
                     response.setFollowing(following);
                     this.following.send_message(response, spread_msg.getSender().toString());
+                }
+                // Caso de ser um follower e não o following direto
+                else {
+                    List<Post> posts = this.followers.get_posts(following, msg.getLast_post_ID());
+                    response.setPosts(posts);
+                    response.setFollowing(following);
+                    this.followers.send_message(response, spread_msg.getSender().toString());
                 }
 
                 break;
@@ -400,10 +413,10 @@ public class NewUser {
             msg.setUsername(this.username);
             msg.setPass(this.pass);
 
-            if (type.equals("LogIn"))
+            if (type.equals("LogIn")) {
                 ms.sendAsync(bootStrapAddr, "handle-LogIn", this.s.encode(msg));
-
-            else
+                this.isLogin = true;
+            }else
                 ms.sendAsync(bootStrapAddr, "handle-Register", this.s.encode(msg));
 
             request.get();
@@ -413,10 +426,19 @@ public class NewUser {
             }
         }
 
+        this.online = true;
+
+        this.following = new Following(this, this.username, this.conn, this.reader, this.s);
+        this.followers = new Followers(this.username, this.conn, this.s, this.reader);
+
+        if(isLogin)
+            importa();
     }
 
 
     private void logout() throws SpreadException {
+
+        exporta();
 
         //Sair do meu grupo e dos utilizadores que me seguem
         this.followers.logout();
@@ -465,18 +487,41 @@ public class NewUser {
 
     }
 
-    private static String bytesToHex(byte[] hash) {
-        StringBuilder hexString = new StringBuilder(2 * hash.length);
-        for (int i = 0; i < hash.length; i++) {
-            String hex = Integer.toHexString(0xff & hash[i]);
-            if(hex.length() == 1) {
-                hexString.append('0');
-            }
-            hexString.append(hex);
+    private void exporta() {
+
+        this.parser = new Parser(this.followers, this.following);
+
+        try {
+            mapper.writerWithDefaultPrettyPrinter().writeValue(new File(this.username + "_peer.json"), parser);
+            //String jsonString = mapper.writerWithDefaultPrettyPrinter().writeValueAsString(parser);
+            //System.out.println(jsonString);
+        } catch (Exception e) {
+            e.printStackTrace();
         }
-        return hexString.toString();
     }
 
+    private void importa(){
+
+        File f = new File(this.username + "_peer.json");
+
+        if(f.exists() && !f.isDirectory()) {
+
+            try {
+
+                this.parser = mapper.readValue(f, Parser.class);
+                this.followers.setFollowings(parser.getFollowers().getFollowings());
+                this.following.setMyPosts(parser.getFollowing().getMyPosts());
+                //System.out.println(this.parser.getFollowing().getMyPosts());
+                //System.out.println(this.parser.getFollowers().getFollowings());
+
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+
+        }else{
+            System.out.println("Ficheiro Inexiste!");
+        }
+    }
 
     public void initial_menu() throws IOException, ExecutionException, InterruptedException, SpreadException, NoSuchAlgorithmException {
         String opcao;
@@ -519,9 +564,10 @@ public class NewUser {
             System.out.println("1 - Post");
             System.out.println("2 - Subscribe");
             System.out.println("3 - Unsubscribe");
-            System.out.println("4 - LogOut");
+            System.out.println("4 - Timeline");
+            System.out.println("5 - LogOut");
             if(isSuper){
-                System.out.println("5 - DEBUG");
+                System.out.println("6 - DEBUG");
             }
             System.out.print("Escolha uma das opções: ");
             System.out.println("\n----------------------------");
@@ -540,17 +586,18 @@ public class NewUser {
                     break;
 
                 case "3":
-
                     this.followers.unfollow();
                     break;
 
                 case "4":
-
-                        logout();
-
+                    this.followers.get_timeline();
                     break;
 
                 case "5":
+                    logout();
+                    break;
+
+                case "6":
                     // DEBUG //
                     System.out.println("------------------");
                     for(Map.Entry<String, List<String>> e : peers_reg.entrySet())

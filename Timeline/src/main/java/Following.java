@@ -13,7 +13,7 @@ public class Following {
     private String username;
     private SpreadConnection conn;
     private Map<Integer, Post> myPosts;
-    private SpreadGroup myGroup;
+    private SpreadGroup SP_Group;
     private BufferedReader in;
     private Serializer seri;
 
@@ -25,7 +25,12 @@ public class Following {
         this.seri = seri;
 
         this.myPosts = new HashMap<>();
-        this.myGroup = null;
+        this.SP_Group = null;
+    }
+
+    public Following()
+    {
+        super();
     }
 
     public String getUsername() {
@@ -40,9 +45,10 @@ public class Following {
         this.myPosts = myPosts;
     }
 
+
     public void entry() throws SpreadException {
-        this.myGroup = new SpreadGroup();
-        this.myGroup.join(this.conn, "Group" + this.username);
+        this.SP_Group = new SpreadGroup();
+        this.SP_Group.join(this.conn, "Group" + this.username);
     }
 
     private int getPostID(){
@@ -108,22 +114,23 @@ public class Following {
         return response;
     }
 
-    public void send_message(Message m, String group) {
-        SpreadMessage message = new SpreadMessage();
 
-        message.setData(this.seri.encode(m));
-        message.addGroup(group);
-        message.setCausal();
-        message.setReliable();
+    public void send_message(Message m, String group) {
+        SpreadMessage msg = new SpreadMessage();
+
+        msg.setData(this.seri.encode(m));
+        msg.addGroup(group);
+        msg.setCausal();
+        msg.setReliable();
 
         try {
-            this.conn.multicast(message);
+            this.conn.multicast(msg);
         } catch (SpreadException e) {
             e.printStackTrace();
         }
     }
 
     public void logout() throws SpreadException {
-        this.myGroup.leave();
+        this.SP_Group.leave();
     }
 }

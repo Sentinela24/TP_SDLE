@@ -1,6 +1,7 @@
+import java.io.Serializable;
 import java.util.Calendar;
 
-public class Post {
+public class Post implements Serializable {
     private int id_post;
     private String username;
     private Calendar date;
@@ -11,6 +12,11 @@ public class Post {
         this.username = username;
         this.date = date;
         this.text = text;
+    }
+
+    public Post()
+    {
+        super();
     }
 
     public int getId_post() {
