@@ -20,7 +20,7 @@ public class Listener_User implements Runnable{
 
             try {
                 SpreadMessage spread_msg = this.conn.receive();
-                this.user.message_process(spread_msg);
+                this.user.spread_recv(spread_msg);
             }
             catch (SpreadException | InterruptedIOException e){
                 e.printStackTrace();
@@ -32,6 +32,4 @@ public class Listener_User implements Runnable{
     public void shutdown() {
         shutdown = true;
     }
-
-
 }

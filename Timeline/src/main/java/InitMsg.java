@@ -11,12 +11,6 @@ public class InitMsg implements Serializable {
     private String addr;
     private List<String> become;
 
-    /*
-    public Bootstrap_Comm(boolean isSuper, Object obj) {
-        this.isSuper = isSuper;
-        this.obj = obj;
-    }
-     */
 
     //1st client msg
     public InitMsg(String username, Integer id) {

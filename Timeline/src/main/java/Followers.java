@@ -12,7 +12,6 @@ import java.util.stream.Collectors;
 
 public class Followers {
 
-    private String username;
     private SpreadConnection conn;
     private Serializer seri;
     private Map<String, Map<Integer, Post>> subscriptions_data;
@@ -21,8 +20,7 @@ public class Followers {
     private int n_posts_received;
     private List<Post> posts_received;
 
-    public Followers(String username, SpreadConnection conn, Serializer seri, BufferedReader in) {
-        this.username = username;
+    public Followers(SpreadConnection conn, Serializer seri, BufferedReader in) {
         this.conn = conn;
         this.seri = seri;
         this.in = in;
@@ -61,7 +59,7 @@ public class Followers {
 
     }
 
-
+    // Usado pelo jackson para serializar
     public Followers()
     {
         super();
@@ -114,7 +112,6 @@ public class Followers {
     public void unfollow(){
         int done = 0;
         String username;
-        SpreadGroup g = null;
 
         while (done == 0){
             System.out.println("Username: ");

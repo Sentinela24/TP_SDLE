@@ -49,7 +49,6 @@ public class NewUser {
     private Listener_User l_User;
     private Parser parser;
     private ObjectMapper mapper = new ObjectMapper();
-    private boolean isLogin = false;
 
     public NewUser() {
 
@@ -71,7 +70,6 @@ public class NewUser {
 
         this.online = false;
         this.checked = false;
-
         this.request = new CompletableFuture<>();
         this.request2 = new CompletableFuture<>();
 
@@ -88,8 +86,8 @@ public class NewUser {
         ms.registerHandler("entry-resp", (a,m)->{
 
             InitMsg msg = this.s.decode(m);
-            this.isSuper = msg.isSuper();
 
+            this.isSuper = msg.isSuper();
             this.sp_user = msg.getUsername(); //username of SP - se for super n vai ter nada
             this.sp_user_port = Integer.parseInt(msg.getAddr().split("#")[0]);
             this.sp_user_unicast = "#" + this.sp_user + "#" + msg.getAddr().split("#")[1];
@@ -99,8 +97,7 @@ public class NewUser {
                 System.out.println("SUPER");
                 this.peers_reg = new HashMap<>();
 
-                //conectar-se ao daemon
-                //criar spread group & join spread group
+                //conectar-se ao daemon - criar spread group & join spread group
                 try {
 
                     conn.connect(InetAddress.getByName("localhost"), this.sp_user_port, "" + this.username, false, false);
@@ -127,24 +124,16 @@ public class NewUser {
 
                     // send my hw stats
                     pushSpecs();
-
             }
 
 
-            //Juntar-se ao seu grupo de seguidores (para lhes enviar msgs)
+            //Juntar-se ao seu grupo de seguidores (para lhes enviar msgs) && Juntar-se aos grupos de quem está a seguir para receber as msgs
             try {
                 this.followers.entry();
-            } catch (SpreadException e) {
-                e.printStackTrace();
-            }
-
-            //Juntar-se aos grupos de quem está a seguir para receber as msgs
-            try {
                 this.following.entry();
             } catch (SpreadException e) {
                 e.printStackTrace();
             }
-
 
             // ################## THREAD TO LISTEN ##################
             this.l_User = new Listener_User(this, this.conn);
@@ -166,13 +155,11 @@ public class NewUser {
         // ################### END ATOMIX ####################
 
         ms.start();
-
-        //reqSuperPeer();
-
     }
 
+    // ##### FIM CONSTRUTOR ##########//
 
-    // ################### req super peer ####################
+    // ################### REQ SP ####################
     public void reqSuperPeer(){
 
         InitMsg msg = new InitMsg(this.username, ++this.lastId);
@@ -194,8 +181,8 @@ public class NewUser {
         sendMsg(send_msg, this.sp_user_unicast);
 
     }
-    // ###################   ####################
 
+    // ###################  ELECTION  ####################
 
     private void election(String type){
 
@@ -274,35 +261,18 @@ public class NewUser {
         InitMsg new_msg = new InitMsg(this.username, values);
         ms.sendAsync(bootStrapAddr, "joined-sp", this.s.encode(new_msg));       //Notify Bootstrap
 
-
         try {
             this.followers.entry();
             this.following.entry();
         } catch (SpreadException e) {
             e.printStackTrace();
         }
-
     }
 
-
-    public String getSpreadMsgUsername(String private_group){
-        String[] tokens = private_group.substring(1).split("#");
-
-        return tokens[0];
-    }
 
     // ################### PROCESS MSGS #################### //
 
-    public void message_process(SpreadMessage spread_msg) throws SpreadException {
-        if (spread_msg.isRegular()) {
-            message_process_regular(spread_msg);
-        }
-        else {
-            //message_process_membership(spread_msg);
-        }
-    }
-
-    private void message_process_regular(SpreadMessage spread_msg) throws SpreadException {
+    public void spread_recv(SpreadMessage spread_msg) throws SpreadException {
 
         Message msg = this.s.decode(spread_msg.getData());
 
@@ -311,13 +281,13 @@ public class NewUser {
 
         switch (type) {
             case "POST" : //POST recebido de alguém que estamos a seguir (following)
-                this.followers.update_post(getSpreadMsgUsername(spread_msg.getSender().toString()), msg.getPosts());
+                this.followers.update_post(spread_msg.getSender().toString().substring(1).split("#")[0], msg.getPosts());
                 break;
 
             case "POSTS" :
                 // Recebido do nosso following (quem estámos a seguir)
-                if (following.equals(getSpreadMsgUsername(spread_msg.getSender().toString()))) {
-                    this.followers.update_posts(getSpreadMsgUsername(spread_msg.getSender().toString()), msg.getPosts());
+                if (following.equals(spread_msg.getSender().toString().substring(1).split("#")[0])) {
+                    this.followers.update_posts(spread_msg.getSender().toString().substring(1).split("#")[0], msg.getPosts());
                 }
                 // Recebido de um follower do nosso following
                 else {
@@ -396,10 +366,11 @@ public class NewUser {
     }
 
 
-    public void verify_entry(String type) throws IOException, ExecutionException, InterruptedException, NoSuchAlgorithmException {
+    public void verify_entry(String type) throws IOException, ExecutionException, InterruptedException {
 
         System.out.println("\n---------- " + type + " ----------" );
         Message msg;
+        boolean isLogin = false;
 
         while (!this.checked){
 
@@ -415,7 +386,7 @@ public class NewUser {
 
             if (type.equals("LogIn")) {
                 ms.sendAsync(bootStrapAddr, "handle-LogIn", this.s.encode(msg));
-                this.isLogin = true;
+                isLogin = true;
             }else
                 ms.sendAsync(bootStrapAddr, "handle-Register", this.s.encode(msg));
 
@@ -427,9 +398,8 @@ public class NewUser {
         }
 
         this.online = true;
-
         this.following = new Following(this, this.username, this.conn, this.reader, this.s);
-        this.followers = new Followers(this.username, this.conn, this.s, this.reader);
+        this.followers = new Followers(this.conn, this.s, this.reader);
 
         if(isLogin)
             importa();
@@ -450,7 +420,6 @@ public class NewUser {
             //Informar SP
             Message send_msg = new Message("LOGOUT");
             sendMsg(send_msg, this.sp_user_unicast);
-
             ms.sendAsync(bootStrapAddr, "handle-peer-logout", this.s.encode("null".getBytes()));
 
         }else{
@@ -484,7 +453,6 @@ public class NewUser {
             System.out.println("Failure!");
             e.printStackTrace();
         }
-
     }
 
     private void exporta() {
@@ -613,7 +581,5 @@ public class NewUser {
 
         System.out.println("Finnished with Success!");
         System.exit(0);
-
     }
-
 }

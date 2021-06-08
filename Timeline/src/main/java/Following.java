@@ -64,7 +64,7 @@ public class Following {
         return res;
     }
 
-    public void post() throws IOException, SpreadException {
+    public void post() throws IOException {
         System.out.println("Write post here: ");
         String text = this.in.readLine();
         Calendar date = Calendar.getInstance();
