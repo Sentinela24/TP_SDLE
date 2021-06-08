@@ -1,3 +1,5 @@
+package Messages;
+
 import java.io.Serializable;
 import java.util.List;
 

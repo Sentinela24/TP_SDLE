@@ -1,3 +1,8 @@
+package Peer;
+
+import Messages.InitMsg;
+import Messages.Message;
+import Messages.Post;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.atomix.cluster.messaging.MessagingConfig;
 import io.atomix.cluster.messaging.impl.NettyMessagingService;
@@ -16,7 +21,7 @@ import java.time.LocalDateTime;
 import java.util.*;
 import java.util.concurrent.*;
 
-public class NewUser {
+public class Peer {
 
     private NettyMessagingService ms;
     private final ScheduledExecutorService es;
@@ -46,11 +51,11 @@ public class NewUser {
 
     private boolean online;
     private boolean checked;
-    private Listener_User l_User;
+    private Listener l_User;
     private Parser parser;
     private ObjectMapper mapper = new ObjectMapper();
 
-    public NewUser() {
+    public Peer() {
 
         //Ter Endereços Netty Diferentes em Localhost
         Random random = new Random();
@@ -136,7 +141,7 @@ public class NewUser {
             }
 
             // ################## THREAD TO LISTEN ##################
-            this.l_User = new Listener_User(this, this.conn);
+            this.l_User = new Listener(this, this.conn);
             Thread t = new Thread(l_User);
             t.start();
 

@@ -1,15 +1,17 @@
+package Peer;
+
 import spread.SpreadConnection;
 import spread.SpreadException;
 import spread.SpreadMessage;
 
 import java.io.InterruptedIOException;
 
-public class Listener_User implements Runnable{
-    private NewUser user;
+public class Listener implements Runnable{
+    private Peer user;
     private SpreadConnection conn;
     private boolean shutdown;
 
-    public Listener_User(NewUser u, SpreadConnection conn){
+    public Listener(Peer u, SpreadConnection conn){
         this.user = u;
         this.conn = conn;
     }

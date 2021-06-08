@@ -1,3 +1,5 @@
+package Messages;
+
 import io.atomix.utils.net.Address;
 
 import java.time.LocalDateTime;
@@ -163,7 +165,7 @@ public class Message {
     }
 
     /*
-    public Message(){
+    public Messages.Message(){
         value = 0;
     }
     public void increment(int val){

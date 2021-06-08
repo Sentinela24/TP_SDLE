@@ -1,3 +1,7 @@
+package Peer;
+
+import Messages.Message;
+import Messages.Post;
 import io.atomix.utils.serializer.Serializer;
 import spread.SpreadConnection;
 import spread.SpreadException;
@@ -9,7 +13,7 @@ import java.io.IOException;
 import java.util.*;
 
 public class Following {
-    private NewUser user;
+    private Peer user;
     private String username;
     private SpreadConnection conn;
     private Map<Integer, Post> myPosts;
@@ -17,7 +21,7 @@ public class Following {
     private BufferedReader in;
     private Serializer seri;
 
-    public Following(NewUser user, String username, SpreadConnection conn, BufferedReader in, Serializer seri) {
+    public Following(Peer user, String username, SpreadConnection conn, BufferedReader in, Serializer seri) {
         this.user = user;
         this.username = username;
         this.conn = conn;

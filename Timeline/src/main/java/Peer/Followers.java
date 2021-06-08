@@ -1,3 +1,7 @@
+package Peer;
+
+import Messages.Message;
+import Messages.Post;
 import io.atomix.utils.serializer.Serializer;
 import spread.SpreadConnection;
 import spread.SpreadException;
@@ -39,23 +43,32 @@ public class Followers {
 
                 for (Map.Entry<String, Map<Integer, Post>> usr : subscriptions_data.entrySet()) {
 
-                    for (Map.Entry<Integer, Post> entry : usr.getValue().entrySet()) {
+                    // getting entrySet() into Set
+                    Set<Map.Entry<Integer, Post>> entrySet = usr.getValue().entrySet();
+
+                    // Collection Iterator
+                    Iterator<Map.Entry<Integer, Post>> itr = entrySet.iterator();
+
+                    while(itr.hasNext()) {
+
+                        Map.Entry<Integer, Post> entry = itr.next();
+
                         int post_id = entry.getKey();
                         Post p = entry.getValue();
 
                         //Se o tempo do post for mais antigo que há 10 min, apagar
-                        long tenMinAgo = Calendar.getInstance().getTimeInMillis() - 600000L;
-                        //long tenMinAgo = Calendar.getInstance().getTimeInMillis() - 600000L;
+                        long tenMinAgo = Calendar.getInstance().getTimeInMillis() - 60000L;
 
                         if(tenMinAgo > p.getDate().getTimeInMillis()){
-                            usr.getValue().remove(post_id);
+                            System.out.println("Clean");
+                            itr.remove();
                         }
                     }
 
                 }
 
             }
-        }, 0, 600000);
+        }, 0, 60000);
 
     }
 
